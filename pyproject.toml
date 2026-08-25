@@ -51,3 +51,6 @@ ignore_missing_imports = true
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 addopts = "-q"
+markers = [
+    "integration: requires a local PostgreSQL (make db-up); auto-skipped when unreachable",
+]

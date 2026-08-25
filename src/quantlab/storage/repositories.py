@@ -12,7 +12,15 @@ from datetime import datetime
 from typing import Protocol
 
 from quantlab.audit.events import AuditEvent
-from quantlab.domain.models import Asset, Candle, Instrument, Timeframe, Venue
+from quantlab.domain.models import (
+    Asset,
+    Candle,
+    DataQualityEvent,
+    Instrument,
+    QualityCode,
+    Timeframe,
+    Venue,
+)
 
 
 class AssetRepository(Protocol):
@@ -48,3 +56,20 @@ class CandleRepository(Protocol):
 
 class AuditEventWriter(Protocol):
     def write(self, event: AuditEvent) -> None: ...
+
+
+class DataQualityEventRepository(Protocol):
+    def insert(self, event: DataQualityEvent) -> None: ...
+
+    def list_unresolved(
+        self,
+        instrument_id: uuid.UUID | None = None,
+        code: QualityCode | None = None,
+    ) -> list[DataQualityEvent]:
+        """Open anomalies (resolved_at IS NULL), oldest first; filters are ANDed."""
+        ...
+
+    def resolve(self, event_id: uuid.UUID, resolved_at: datetime) -> bool:
+        """Mark one event resolved. Returns False if it was unknown or already
+        resolved — the first resolution timestamp is never overwritten."""
+        ...

@@ -11,6 +11,7 @@ import uuid
 from datetime import datetime
 from decimal import Decimal
 from enum import StrEnum
+from typing import Any
 
 from pydantic import BaseModel, ConfigDict, field_validator, model_validator
 
@@ -113,6 +114,48 @@ class Candle(FrozenModel):
         if self.volume < 0:
             raise ValueError("volume must be >= 0")
         return self
+
+
+class QualitySeverity(StrEnum):
+    INFO = "info"
+    WARNING = "warning"
+    ERROR = "error"
+
+
+class QualityCode(StrEnum):
+    """Data quality anomaly codes (03-Data-Engine §17-§20, Roadmap §26)."""
+
+    GAP = "GAP"
+    KNOWN_VENUE_GAP = "KNOWN_VENUE_GAP"
+    DUPLICATE_SKIPPED = "DUPLICATE_SKIPPED"
+    CANDLE_MISMATCH = "CANDLE_MISMATCH"
+    OUT_OF_ORDER = "OUT_OF_ORDER"
+    STALE_DATA = "STALE_DATA"
+    INVALID_CANDLE = "INVALID_CANDLE"
+
+
+class DataQualityEvent(FrozenModel):
+    """A detected data anomaly (23-Database-Schema §19). Never blocks the
+    pipeline silently: suspicious data is recorded here, not destroyed."""
+
+    event_id: uuid.UUID
+    dataset_type: str
+    instrument_id: uuid.UUID | None
+    severity: QualitySeverity
+    code: QualityCode
+    event_time: datetime
+    details: dict[str, Any] | None = None
+    resolved_at: datetime | None = None
+
+    @field_validator("event_time")
+    @classmethod
+    def _utc_event_time(cls, value: datetime) -> datetime:
+        return require_utc(value)
+
+    @field_validator("resolved_at")
+    @classmethod
+    def _utc_resolved_at(cls, value: datetime | None) -> datetime | None:
+        return None if value is None else require_utc(value)
 
 
 class StrategyStatus(StrEnum):
