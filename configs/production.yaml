@@ -1,0 +1,4 @@
+config_version: "1"
+log_level: INFO
+# Stays false until Phase 8 (Limited Live) passes its gates and governance approves.
+trading_enabled: false

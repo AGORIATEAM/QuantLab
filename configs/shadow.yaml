@@ -1,0 +1,4 @@
+config_version: "1"
+log_level: INFO
+# Shadow mode observes real venue state but never sends orders.
+trading_enabled: false

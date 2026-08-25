@@ -1,0 +1,4 @@
+config_version: "1"
+log_level: INFO
+# Paper trading executes simulated orders only; enabled in Phase 6.
+trading_enabled: false

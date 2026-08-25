@@ -1,0 +1,5 @@
+# Base configuration — overridden by configs/<environment>.yaml, then env vars.
+# NEVER put secrets here (17-AI-Development-Protocol §27).
+config_version: "1"
+log_level: INFO
+trading_enabled: false
