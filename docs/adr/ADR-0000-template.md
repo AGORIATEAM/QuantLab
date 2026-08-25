@@ -1,4 +1,4 @@
-# ADR-0001 — Titre
+# ADR-0000 — Titre (template)
 
 ## Statut
 DRAFT | ACCEPTED | REJECTED | SUPERSEDED
