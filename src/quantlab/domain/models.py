@@ -8,7 +8,7 @@ Principles §27: make invalid states difficult).
 from __future__ import annotations
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from enum import StrEnum
 from typing import Any
@@ -45,6 +45,22 @@ class Timeframe(StrEnum):
     H1 = "1h"
     H4 = "4h"
     D1 = "1d"
+
+    @property
+    def duration(self) -> timedelta:
+        return _TIMEFRAME_DURATIONS[self]
+
+
+_TIMEFRAME_DURATIONS = {
+    Timeframe.M1: timedelta(minutes=1),
+    Timeframe.M3: timedelta(minutes=3),
+    Timeframe.M5: timedelta(minutes=5),
+    Timeframe.M15: timedelta(minutes=15),
+    Timeframe.M30: timedelta(minutes=30),
+    Timeframe.H1: timedelta(hours=1),
+    Timeframe.H4: timedelta(hours=4),
+    Timeframe.D1: timedelta(days=1),
+}
 
 
 class Asset(FrozenModel):
