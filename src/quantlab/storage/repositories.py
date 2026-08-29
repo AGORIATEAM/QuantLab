@@ -53,6 +53,16 @@ class CandleRepository(Protocol):
         end: datetime,
     ) -> list[Candle]: ...
 
+    def latest_open_time(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+    ) -> datetime | None:
+        """Newest stored open_time for this series — the resume checkpoint of
+        the historical download (derived from data, never from job state)."""
+        ...
+
 
 class AuditEventWriter(Protocol):
     def write(self, event: AuditEvent) -> None: ...

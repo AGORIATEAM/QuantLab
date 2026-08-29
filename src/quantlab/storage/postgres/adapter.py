@@ -10,6 +10,7 @@ import json
 import uuid
 from collections.abc import Sequence
 from datetime import datetime
+from typing import Any
 
 import psycopg
 
@@ -17,10 +18,104 @@ from quantlab.audit.events import AuditEvent
 from quantlab.domain.models import (
     Candle,
     DataQualityEvent,
+    Instrument,
+    InstrumentStatus,
     QualityCode,
     QualitySeverity,
     Timeframe,
+    Venue,
 )
+
+
+class PostgresVenueRepository:
+    def __init__(self, conninfo: str) -> None:
+        self._conninfo = conninfo
+
+    def get_by_code(self, code: str) -> Venue | None:
+        query = "SELECT venue_id, code, name, venue_type, is_active FROM venues WHERE code = %s"
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(query, (code,))
+            row = cur.fetchone()
+        if row is None:
+            return None
+        return Venue(venue_id=row[0], code=row[1], name=row[2], venue_type=row[3], is_active=row[4])
+
+    def insert(self, venue: Venue) -> None:
+        query = """
+            INSERT INTO venues (venue_id, code, name, venue_type, is_active)
+            VALUES (%s, %s, %s, %s, %s)
+        """
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(
+                query, (venue.venue_id, venue.code, venue.name, venue.venue_type, venue.is_active)
+            )
+            conn.commit()
+
+
+_INSTRUMENT_COLUMNS = """
+    instrument_id, venue_id, asset_id, venue_symbol, instrument_type,
+    tick_size, lot_size, min_quantity, min_notional, status
+"""
+
+
+def _row_to_instrument(row: tuple[Any, ...]) -> Instrument:
+    return Instrument(
+        instrument_id=row[0],
+        venue_id=row[1],
+        asset_id=row[2],
+        venue_symbol=row[3],
+        instrument_type=row[4],
+        tick_size=row[5],
+        lot_size=row[6],
+        min_quantity=row[7],
+        min_notional=row[8],
+        status=InstrumentStatus(row[9]),
+    )
+
+
+class PostgresInstrumentRepository:
+    def __init__(self, conninfo: str) -> None:
+        self._conninfo = conninfo
+
+    def get(self, instrument_id: uuid.UUID) -> Instrument | None:
+        query = f"SELECT {_INSTRUMENT_COLUMNS} FROM instruments WHERE instrument_id = %s"
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(query, (instrument_id,))
+            row = cur.fetchone()
+        return None if row is None else _row_to_instrument(row)
+
+    def get_by_venue_symbol(self, venue_id: uuid.UUID, venue_symbol: str) -> Instrument | None:
+        query = (
+            f"SELECT {_INSTRUMENT_COLUMNS} FROM instruments "
+            "WHERE venue_id = %s AND venue_symbol = %s"
+        )
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(query, (venue_id, venue_symbol))
+            row = cur.fetchone()
+        return None if row is None else _row_to_instrument(row)
+
+    def insert(self, instrument: Instrument) -> None:
+        query = f"""
+            INSERT INTO instruments ({_INSTRUMENT_COLUMNS})
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(
+                query,
+                (
+                    instrument.instrument_id,
+                    instrument.venue_id,
+                    instrument.asset_id,
+                    instrument.venue_symbol,
+                    instrument.instrument_type,
+                    instrument.tick_size,
+                    instrument.lot_size,
+                    instrument.min_quantity,
+                    instrument.min_notional,
+                    instrument.status.value,
+                ),
+            )
+            conn.commit()
 
 
 class PostgresCandleRepository:
@@ -38,30 +133,47 @@ class PostgresCandleRepository:
             VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
             ON CONFLICT (instrument_id, timeframe, open_time, source) DO NOTHING
         """
-        inserted = 0
+        rows = [
+            (
+                c.candle_id,
+                c.instrument_id,
+                c.timeframe.value,
+                c.open_time,
+                c.close_time,
+                c.open,
+                c.high,
+                c.low,
+                c.close,
+                c.volume,
+                c.trade_count,
+                c.source,
+                c.data_version,
+            )
+            for c in candles
+        ]
+        # executemany is pipelined in psycopg3 (04-Storage §27: batch, one
+        # transaction); rowcount is the cumulated number of inserted rows,
+        # so duplicates skipped by ON CONFLICT are not counted.
         with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
-            for c in candles:
-                cur.execute(
-                    query,
-                    (
-                        c.candle_id,
-                        c.instrument_id,
-                        c.timeframe.value,
-                        c.open_time,
-                        c.close_time,
-                        c.open,
-                        c.high,
-                        c.low,
-                        c.close,
-                        c.volume,
-                        c.trade_count,
-                        c.source,
-                        c.data_version,
-                    ),
-                )
-                inserted += cur.rowcount
+            cur.executemany(query, rows)
+            inserted = cur.rowcount
             conn.commit()
         return inserted
+
+    def latest_open_time(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+    ) -> datetime | None:
+        query = """
+            SELECT MAX(open_time) FROM candles
+            WHERE instrument_id = %s AND timeframe = %s AND source = %s
+        """
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(query, (instrument_id, timeframe.value, source))
+            row = cur.fetchone()
+        return row[0] if row is not None else None
 
     def read_range(
         self,
