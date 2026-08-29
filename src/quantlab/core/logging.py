@@ -10,10 +10,16 @@ import logging
 
 import structlog
 
+# Chatty third-party loggers capped at WARNING so DEBUG/INFO runs stay
+# readable: httpx logs every request, httpcore every socket operation.
+_NOISY_THIRD_PARTY_LOGGERS = ("httpx", "httpcore")
+
 
 def configure_logging(level: str = "INFO") -> None:
     """Configure structlog for JSON output. Idempotent."""
     logging.basicConfig(level=level, format="%(message)s")
+    for name in _NOISY_THIRD_PARTY_LOGGERS:
+        logging.getLogger(name).setLevel(logging.WARNING)
     structlog.configure(
         processors=[
             structlog.contextvars.merge_contextvars,

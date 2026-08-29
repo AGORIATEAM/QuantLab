@@ -1,4 +1,5 @@
 import json
+import logging
 
 import structlog
 
@@ -18,3 +19,9 @@ def test_logs_are_json_with_correlation_ids(capsys: object) -> None:
     assert line["request_id"] == "req-1"
     assert line["correlation_id"] == "corr-1"
     assert "timestamp" in line
+
+
+def test_third_party_http_loggers_are_capped_at_warning() -> None:
+    configure_logging("DEBUG")
+    for name in ("httpx", "httpcore"):
+        assert logging.getLogger(name).getEffectiveLevel() == logging.WARNING
