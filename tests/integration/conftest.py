@@ -50,7 +50,10 @@ def database_url() -> str:
     """URL of a freshly migrated + seeded quantlab_test database."""
     try:
         admin = psycopg.connect(_admin_url(), connect_timeout=2)
-    except psycopg.OperationalError:
+    except psycopg.OperationalError as exc:
+        if os.environ.get("CI"):
+            # In CI a missing database is a broken pipeline, never a silent skip.
+            pytest.fail(f"CI requires PostgreSQL but it is unreachable: {exc}")
         pytest.skip("PostgreSQL not reachable — run `make db-up` to enable integration tests")
     admin.autocommit = True
     with admin.cursor() as cur:
