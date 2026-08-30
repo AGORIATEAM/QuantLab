@@ -23,6 +23,16 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parents[2]
 ADMIN_URL_DEFAULT = "postgresql://quantlab:quantlab_local_only@localhost:5432/quantlab_dev"
 TEST_DB_NAME = "quantlab_test"
+INTEGRATION_DIR = Path(__file__).resolve().parent
+
+
+def pytest_collection_modifyitems(config: pytest.Config, items: list[pytest.Item]) -> None:
+    """Every test under tests/integration/ is marked `integration`, so a new
+    file can never be collected unmarked by the DB-less unit CI job (the
+    per-module `pytestmark` lines are now redundant but harmless)."""
+    for item in items:
+        if INTEGRATION_DIR in Path(item.fspath).parents:
+            item.add_marker(pytest.mark.integration)
 
 
 def _admin_url() -> str:
