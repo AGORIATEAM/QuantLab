@@ -1,6 +1,20 @@
 services:
   postgres:
     image: postgres:16
+    # Small-machine tuning: bulk candle inserts on the previous USB bind mount
+    # crashed Postgres (I/O errors on WAL, 270s checkpoints). Data now lives in
+    # the named volume `pgdata`; these settings keep checkpoints frequent and
+    # cheap so a crash never has much WAL to replay.
+    command:
+      - postgres
+      - -c
+      - shared_buffers=256MB # moderate; the dataset exceeds RAM, rely on OS cache
+      - -c
+      - max_wal_size=512MB # cap WAL so checkpoints trigger often during bulk loads
+      - -c
+      - checkpoint_timeout=5min
+      - -c
+      - checkpoint_completion_target=0.9 # spread checkpoint I/O instead of bursting
     environment:
       POSTGRES_USER: quantlab
       POSTGRES_PASSWORD: quantlab_local_only
@@ -8,9 +22,12 @@ services:
     ports:
       - "5432:5432"
     volumes:
-      - ./pgdata:/var/lib/postgresql/data
+      - pgdata:/var/lib/postgresql/data
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U quantlab -d quantlab_dev"]
       interval: 5s
       timeout: 3s
       retries: 10
+
+volumes:
+  pgdata:
