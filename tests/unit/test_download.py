@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from fakes import GridSource as BaseGridSource
 from fakes import InMemoryCandles, RecordingAudit
 
 from quantlab.audit.events import AuditResult
@@ -45,26 +46,11 @@ def make_candle(open_time: datetime) -> Candle:
     )
 
 
-class GridSource:
-    """HistoricalCandleSource double serving a fixed candle grid."""
+class GridSource(BaseGridSource):
+    """Grid double built from open_times with this module's fixed instrument."""
 
     def __init__(self, open_times: list[datetime]) -> None:
-        self.candles = [make_candle(t) for t in sorted(open_times)]
-        self.calls: list[tuple[datetime, datetime, int]] = []
-
-    def fetch_candles(
-        self,
-        instrument: Instrument,
-        timeframe: Timeframe,
-        start: datetime,
-        end: datetime,
-        limit: int = 1000,
-    ) -> list[Candle]:
-        self.calls.append((start, end, limit))
-        return [c for c in self.candles if start <= c.open_time < end][:limit]
-
-    def health_check(self) -> bool:
-        return True
+        super().__init__([make_candle(t) for t in open_times])
 
 
 class FailingSource(GridSource):

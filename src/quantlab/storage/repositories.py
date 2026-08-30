@@ -63,6 +63,20 @@ class CandleRepository(Protocol):
         the historical download (derived from data, never from job state)."""
         ...
 
+    def missing_ranges(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+    ) -> list[tuple[datetime, datetime]]:
+        """Half-open [hole_start, hole_end) ranges of open_times missing from
+        the stored series over [start, end), oldest first. Leading, interior
+        and trailing holes are all reported; `start` and `end` must sit on the
+        timeframe grid. An empty series yields the single hole [start, end)."""
+        ...
+
 
 class AuditEventWriter(Protocol):
     def write(self, event: AuditEvent) -> None: ...

@@ -17,8 +17,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from datetime import datetime
 
-from quantlab.audit.events import ActorType, AuditEvent, AuditResult
-from quantlab.core.ids import new_id
+from quantlab.audit.events import AuditEvent, AuditResult, service_event
 from quantlab.core.logging import get_logger
 from quantlab.core.timeutils import require_utc
 from quantlab.data.connector import HistoricalCandleSource
@@ -160,16 +159,5 @@ def _event(
     result: AuditResult,
     metadata: dict[str, object],
 ) -> AuditEvent:
-    return AuditEvent(
-        audit_event_id=new_id(),
-        actor_type=ActorType.SERVICE,
-        actor_id=ACTOR_ID,
-        action=action,
-        resource_type="candles",
-        resource_id=str(instrument.instrument_id),
-        environment=None,
-        request_id=None,
-        correlation_id=None,
-        result=result,
-        metadata=metadata,
-    )
+    resource_id = str(instrument.instrument_id)
+    return service_event(ACTOR_ID, action, "candles", resource_id, result, metadata)

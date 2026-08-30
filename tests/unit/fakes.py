@@ -7,7 +7,7 @@ import uuid
 from datetime import datetime
 
 from quantlab.audit.events import AuditEvent
-from quantlab.domain.models import Candle, DataQualityEvent, QualityCode, Timeframe
+from quantlab.domain.models import Candle, DataQualityEvent, Instrument, QualityCode, Timeframe
 
 
 class InMemoryQualityEvents:
@@ -88,6 +88,55 @@ class InMemoryCandles:
             if c.instrument_id == instrument_id and c.timeframe == timeframe and c.source == source
         ]
         return max(times) if times else None
+
+    def missing_ranges(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+    ) -> list[tuple[datetime, datetime]]:
+        times = sorted(
+            c.open_time
+            for c in self.rows.values()
+            if c.instrument_id == instrument_id
+            and c.timeframe == timeframe
+            and c.source == source
+            and start <= c.open_time < end
+        )
+        step = timeframe.duration
+        holes: list[tuple[datetime, datetime]] = []
+        cursor = start
+        for open_time in times:
+            if open_time > cursor:
+                holes.append((cursor, open_time))
+            cursor = open_time + step
+        if cursor < end:
+            holes.append((cursor, end))
+        return holes
+
+
+class GridSource:
+    """HistoricalCandleSource double serving a fixed candle list."""
+
+    def __init__(self, candles: list[Candle]) -> None:
+        self.candles = sorted(candles, key=lambda c: c.open_time)
+        self.calls: list[tuple[datetime, datetime, int]] = []
+
+    def fetch_candles(
+        self,
+        instrument: Instrument,
+        timeframe: Timeframe,
+        start: datetime,
+        end: datetime,
+        limit: int = 1000,
+    ) -> list[Candle]:
+        self.calls.append((start, end, limit))
+        return [c for c in self.candles if start <= c.open_time < end][:limit]
+
+    def health_check(self) -> bool:
+        return True
 
 
 class RecordingAudit:

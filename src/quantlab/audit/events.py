@@ -8,6 +8,8 @@ from typing import Any
 
 from pydantic import BaseModel, ConfigDict
 
+from quantlab.core.ids import new_id
+
 
 class ActorType(StrEnum):
     HUMAN = "human"
@@ -35,3 +37,27 @@ class AuditEvent(BaseModel):
     correlation_id: str | None
     result: AuditResult
     metadata: dict[str, Any] | None = None
+
+
+def service_event(
+    actor_id: str,
+    action: str,
+    resource_type: str,
+    resource_id: str | None,
+    result: AuditResult,
+    metadata: dict[str, Any] | None = None,
+) -> AuditEvent:
+    """Event emitted by an internal service (downloader, gap scan, ...)."""
+    return AuditEvent(
+        audit_event_id=new_id(),
+        actor_type=ActorType.SERVICE,
+        actor_id=actor_id,
+        action=action,
+        resource_type=resource_type,
+        resource_id=resource_id,
+        environment=None,
+        request_id=None,
+        correlation_id=None,
+        result=result,
+        metadata=metadata,
+    )

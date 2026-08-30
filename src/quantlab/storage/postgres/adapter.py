@@ -175,6 +175,60 @@ class PostgresCandleRepository:
             row = cur.fetchone()
         return row[0] if row is not None else None
 
+    def missing_ranges(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+    ) -> list[tuple[datetime, datetime]]:
+        # Interior holes via a window function (one index scan, no
+        # generate_series over millions of expected rows); leading and
+        # trailing holes derived from MIN/MAX in Python.
+        interior_query = """
+            WITH stored AS (
+                SELECT open_time,
+                       LEAD(open_time) OVER (ORDER BY open_time) AS next_open
+                FROM candles
+                WHERE instrument_id = %(instrument_id)s AND timeframe = %(timeframe)s
+                  AND source = %(source)s
+                  AND open_time >= %(start)s AND open_time < %(end)s
+            )
+            SELECT open_time + %(step)s, next_open
+            FROM stored
+            WHERE next_open > open_time + %(step)s
+            ORDER BY 1
+        """
+        bounds_query = """
+            SELECT MIN(open_time), MAX(open_time) FROM candles
+            WHERE instrument_id = %s AND timeframe = %s AND source = %s
+              AND open_time >= %s AND open_time < %s
+        """
+        step = timeframe.duration
+        params = {
+            "instrument_id": instrument_id,
+            "timeframe": timeframe.value,
+            "source": source,
+            "start": start,
+            "end": end,
+            "step": step,
+        }
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(interior_query, params)
+            interior = [(r[0], r[1]) for r in cur.fetchall()]
+            cur.execute(bounds_query, (instrument_id, timeframe.value, source, start, end))
+            first, last = cur.fetchone()  # type: ignore[misc]
+        if first is None:
+            return [(start, end)]
+        holes: list[tuple[datetime, datetime]] = []
+        if first > start:
+            holes.append((start, first))
+        holes.extend(interior)
+        if last + step < end:
+            holes.append((last + step, end))
+        return holes
+
     def read_range(
         self,
         instrument_id: uuid.UUID,
