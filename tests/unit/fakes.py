@@ -223,6 +223,20 @@ class InMemoryRawWsMessages:
     ) -> None:
         self.rows.append((message_id, received_at, stream, payload))
 
+    def latency_stats(self, since: datetime) -> tuple[float, float, float, int] | None:
+        lats = []
+        for _id, received_at, _stream, payload in self.rows:
+            if received_at < since:
+                continue
+            data = payload.get("data")
+            if isinstance(data, dict) and isinstance(data.get("E"), int):
+                lats.append(received_at.timestamp() * 1000 - data["E"])
+        if not lats:
+            return None
+        lats.sort()
+        p95 = lats[min(len(lats) - 1, round(0.95 * (len(lats) - 1)))]
+        return (sum(lats) / len(lats), p95, lats[-1], len(lats))
+
 
 class InMemorySnapshotFactory:
     """CandleSnapshotFactory double: the yielded repository is a copy taken

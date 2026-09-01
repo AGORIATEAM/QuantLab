@@ -1,4 +1,4 @@
-.PHONY: install lint format typecheck test audit ci db-up db-down migrate seed backup restore-check
+.PHONY: install lint format typecheck test audit ci db-up db-down migrate seed backup restore-check health sync
 
 # Physical copy outside the Docker volume (the volume lives on the internal
 # disk since the USB bind-mount incident). Override: make backup BACKUP_DIR=...
@@ -43,6 +43,12 @@ seed:
 
 # Write to .tmp, promote to .dump only after pg_dump exits 0 AND the file has
 # a plausible size — never leave a silent 0-byte "backup" behind.
+health:
+	python scripts/health.py
+
+sync:
+	python scripts/sync.py
+
 backup:
 	@mkdir -p "$(BACKUP_DIR)"
 	@f="$(BACKUP_DIR)/quantlab_dev_$$(date -u +%Y%m%dT%H%M%SZ).dump"; \

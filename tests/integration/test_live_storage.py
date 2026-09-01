@@ -4,7 +4,7 @@ candles_canonical view's REST-over-WS precedence."""
 from __future__ import annotations
 
 import uuid
-from datetime import UTC, datetime
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 
 import psycopg
@@ -89,3 +89,21 @@ def test_candles_canonical_prefers_rest_over_ws(
         ("binance", Decimal("111")),
         ("binance_ws", Decimal("333")),
     ]
+
+
+def test_latency_stats_from_raw_journal(database_url: str) -> None:
+    writer = PostgresRawWsMessageWriter(database_url)
+    base = utc_now()
+    # three messages with venue event times 100/200/700 ms before reception
+    for offset_ms in (100, 200, 700):
+        received = base
+        event_ms = int(received.timestamp() * 1000) - offset_ms
+        writer.insert(new_id(), received, "latency@test", {"data": {"e": "kline", "E": event_ms}})
+    stats = writer.latency_stats(base - timedelta(minutes=1))
+    assert stats is not None
+    avg, p95, mx, count = stats
+    assert count >= 3
+    assert mx >= 700
+    assert avg > 0 and p95 <= mx
+
+    assert writer.latency_stats(base + timedelta(hours=1)) is None

@@ -560,6 +560,25 @@ class PostgresRawWsMessageWriter:
             cur.execute(query, (message_id, received_at, stream, json.dumps(payload)))
             conn.commit()
 
+    def latency_stats(self, since: datetime) -> tuple[float, float, float, int] | None:
+        query = """
+            WITH lat AS (
+                SELECT EXTRACT(EPOCH FROM received_at) * 1000
+                       - (payload->'data'->>'E')::bigint AS ms
+                FROM raw_ws_messages
+                WHERE received_at >= %s AND payload->'data'->>'E' IS NOT NULL
+            )
+            SELECT avg(ms), percentile_cont(0.95) WITHIN GROUP (ORDER BY ms),
+                   max(ms), count(*)
+            FROM lat
+        """
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(query, (since,))
+            row = cur.fetchone()
+        if row is None or row[3] == 0:
+            return None
+        return (float(row[0]), float(row[1]), float(row[2]), int(row[3]))
+
 
 class PostgresAuditEventWriter:
     def __init__(self, conninfo: str) -> None:

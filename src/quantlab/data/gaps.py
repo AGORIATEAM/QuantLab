@@ -86,6 +86,32 @@ def align_down(ts: datetime, step: timedelta) -> datetime:
     return datetime.fromtimestamp(math.floor(ts.timestamp() / seconds) * seconds, tz=UTC)
 
 
+def detect_holes(
+    candles: CandleRepository,
+    quality: DataQualityEventRepository,
+    instrument: Instrument,
+    timeframe: Timeframe,
+    start: datetime,
+    end: datetime,
+    source_name: str,
+) -> list[Hole]:
+    """Report-only hole detection: missing ranges over [start, end) with
+    their KNOWN_VENUE_GAP/unresolved-GAP coverage flag. Writes NOTHING —
+    scan_gaps builds on this and records events; health reads it as is."""
+    step = timeframe.duration
+    start = align_up(require_utc(start, "start"), step)
+    end = align_down(require_utc(end, "end"), step)
+    if end <= start:
+        raise ValueError("end must be strictly after start (after grid alignment)")
+    missing = candles.missing_ranges(instrument.instrument_id, timeframe, source_name, start, end)
+    covered = _covered_ranges(quality, instrument, timeframe, source_name)
+    holes: list[Hole] = []
+    for hole_start, hole_end in missing:
+        known = any(c_start <= hole_start and hole_end <= c_end for c_start, c_end in covered)
+        holes.append(Hole(hole_start, hole_end, int((hole_end - hole_start) / step), known))
+    return holes
+
+
 def scan_gaps(
     candles: CandleRepository,
     quality: DataQualityEventRepository,
@@ -100,21 +126,14 @@ def scan_gaps(
     step = timeframe.duration
     start = align_up(require_utc(start, "start"), step)
     end = align_down(require_utc(end, "end"), step)
-    if end <= start:
-        raise ValueError("end must be strictly after start (after grid alignment)")
-
-    missing = candles.missing_ranges(instrument.instrument_id, timeframe, source_name, start, end)
-    covered = _covered_ranges(quality, instrument, timeframe, source_name)
+    holes = detect_holes(candles, quality, instrument, timeframe, start, end, source_name)
 
     now = utc_now()
-    holes: list[Hole] = []
     new_events = 0
-    for hole_start, hole_end in missing:
-        known = any(c_start <= hole_start and hole_end <= c_end for c_start, c_end in covered)
-        expected = int((hole_end - hole_start) / step)
-        holes.append(Hole(hole_start, hole_end, expected, known))
-        if known:
+    for hole in holes:
+        if hole.already_known:
             continue
+        hole_start, hole_end, expected = hole.start, hole.end, hole.expected_candles
         quality.insert(
             _quality_event(
                 QualityCode.GAP,

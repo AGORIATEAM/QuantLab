@@ -135,6 +135,12 @@ class RawWsMessageWriter(Protocol):
         payload: dict[str, Any],
     ) -> None: ...
 
+    def latency_stats(self, since: datetime) -> tuple[float, float, float, int] | None:
+        """(avg_ms, p95_ms, max_ms, count) of venue-event-to-reception latency
+        over messages received since `since` — computed from received_at and
+        the archived payload's event time. None when no messages qualify."""
+        ...
+
 
 class CandleSnapshotFactory(Protocol):
     """Opens a read-only, point-in-time view of the candle store. Everything
