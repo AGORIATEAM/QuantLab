@@ -7,8 +7,12 @@ Toute décision contredisant les docs exige un ADR dans `docs/adr/` AVANT implé
 Le protocole de développement complet est dans `docs/17-AI-Development-Protocol.md` — le lire avant toute tâche non triviale.
 
 ## Phase actuelle
-Phase 1 — Data Platform (voir `docs/25-Roadmap.md` §20-§34).
-Périmètre validé : BTC/USDT et ETH/USDT spot (Binance). Rien d'autre.
+Phase 2 — Research & Analysis (voir `docs/25-Roadmap.md` §35+).
+Phase 1 (Data Platform) clôturée le 2026-09-01 —
+rapport : `docs/phase-reports/PHASE-1-CLOSURE.md` ; dettes suivies : `BACKLOG.md`.
+Données : dataset officiel `btc-eth-spot-binance@v1` (hash 178e7403…), maintenu
+par `make sync` ; santé par `make health`.
+Périmètre données : BTC/USDT et ETH/USDT spot (Binance). Rien d'autre.
 Ne JAMAIS implémenter en avance sur la roadmap sans demande explicite.
 
 ## Règles non négociables
@@ -21,6 +25,10 @@ Ne JAMAIS implémenter en avance sur la roadmap sans demande explicite.
 - `trading_enabled: false` dans toutes les configs commitées jusqu'à Phase 6 validée.
 - Production refusée sans `QUANTLAB_ALLOW_PRODUCTION=true` (fail closed).
 - Secrets : jamais dans le code, Git, logs, fixtures ou prompts. Références env uniquement.
+- Maintenance des données : exclusivement `make sync` — JAMAIS `download_history`
+  seul. Le curseur de reprise repart du MAX(open_time) et saute les trous
+  intérieurs (cf. îlots de 2 705 bougies détectés par `make health` le 2026-09-01) ;
+  seul `make sync` enchaîne download → scan/backfill → health.
 - Migrations : fichiers SQL dans `migrations/`, appliquées par `scripts/migrate.py`.
   Une migration appliquée ne se modifie JAMAIS — on en crée une nouvelle.
 
