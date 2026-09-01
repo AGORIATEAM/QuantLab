@@ -1,0 +1,74 @@
+{
+  "experiment_id": "EXP-20260901-003",
+  "title": "H1: 5m structure break aligned with 1h structure",
+  "status": "PLANNED",
+  "owner": "quantlab",
+  "created_at": "2026-09-01T08:45:00+00:00",
+  "hypothesis": "Une cassure de structure 5m dans le sens de la structure 1h a une espérance nette positive après coûts, supérieure aux baselines (EXP-20260901-001 buy-and-hold, EXP-20260901-002 breakout24).",
+  "experiment_type": "strategy-hypothesis",
+  "strategy_version": null,
+  "code_commit": null,
+  "dataset_version": "btc-eth-spot-binance@v1",
+  "dataset_content_hash": "178e7403a3d60e4a3888c6e56833e9bfcba3b41d20084b87d1b10ed1cfbb9b46",
+  "config_version": null,
+  "feature_version": null,
+  "model_version": null,
+  "prompt_version": null,
+  "parent_experiment_id": null,
+  "baseline_experiment_id": "EXP-20260901-002",
+  "config": {
+    "instruments": ["BTCUSDT", "ETHUSDT"],
+    "note_instruments": "ADR-0002 décision 5 : les deux instruments sont requis; une hypothèse qui ne tient que sur un seul est réfutée.",
+    "rules": {
+      "direction": "état de structure 1h (BULLISH -> longs seulement, BEARISH -> shorts seulement)",
+      "no_trade": "aucun trade si l'état 1h est NEUTRAL",
+      "entry": "BOS 5m validé dans la direction 1h, exécuté à l'open de la bougie 5m suivante",
+      "stop": "dernier swing 5m opposé (swing low pour un long, swing high pour un short)",
+      "exit": "cible en R (voisinage ci-dessous) OU CHoCH 5m contre la position",
+      "sizing": "risque fixe 0.5% de l'equity par trade (distance d'entrée au stop)"
+    },
+    "timeframes": {
+      "decision": "5m",
+      "context": "1h",
+      "per_adr": "ADR-0002 décision 2"
+    },
+    "parameter_neighborhoods": {
+      "n_5m": [2, 3],
+      "n_1h": [3, 5],
+      "atr_multiplier": [1.5, 2, 3],
+      "breakout_buffer_atr": [0, 0.1]
+    },
+    "windows": {
+      "in_sample": "[2017-08-17, 2023-01-01)",
+      "out_of_sample": "[2023-01-01, 2026-08-30)",
+      "per_adr": "ADR-0002 décision 5 — jamais inversé"
+    },
+    "fill_model": {
+      "reference": "EXP-20260901-001/002 (ADR-0002 décision 4)",
+      "execution": "open of the candle following the signal candle",
+      "taker_fee": "0.001",
+      "half_spread": "0.0001",
+      "sizing_override": "fixed fractional risk 0.5% of equity (this experiment)",
+      "equity_convention": {
+        "curve": "mark-to-market at each decision candle close",
+        "final_liquidation": "net return liquidates any open position at the last close, with costs"
+      }
+    }
+  },
+  "metrics": [
+    "expectancy_r",
+    "profit_factor",
+    "win_rate_pct",
+    "max_drawdown_pct",
+    "trades",
+    "fees_paid",
+    "exposure_pct",
+    "sharpe_annualized",
+    "comparison_vs_EXP-20260901-001_and_002"
+  ],
+  "acceptance_criteria": "Réfutation (fixée au pré-enregistrement) : H1 est REJETÉE si, en out-of-sample, l'espérance nette par trade est <= 0 OU le profit factor < 1.15 sur l'UN des deux instruments, OU si les résultats s'inversent dans un voisinage de paramètres déclaré.",
+  "results": null,
+  "decision": null,
+  "artifacts": [],
+  "notes": "Pré-enregistré avant toute exécution (ADR-0002 décision 5, docs/21). L'exécution requiert : Market Structure Engine minimal (plan validé), puis validation utilisateur de ce pré-enregistrement. Ne pas exécuter avant."
+}
