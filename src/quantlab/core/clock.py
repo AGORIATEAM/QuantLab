@@ -5,6 +5,11 @@ utc_now() directly: they receive a Clock. In research the replay engine owns
 a SimulatedClock and is the only writer of time; in live the same code runs
 against WallClock. Any utc_now() call inside an engine is a look-ahead bug
 waiting to happen.
+
+Scope (T7c): Clock is for components with TEMPORAL STATE — timeouts,
+sessions, calendar windows, live ingestion. A pure candle consumer gets its
+time from the candles themselves (close_time); do not inject a Clock
+ritually into components that would never read it.
 """
 
 from __future__ import annotations

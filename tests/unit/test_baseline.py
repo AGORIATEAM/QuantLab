@@ -9,7 +9,7 @@ from decimal import Decimal
 import pytest
 
 from quantlab.core.ids import new_id
-from quantlab.data.replay import ReplayEvent
+from quantlab.data.replay import ReplayEvent, SeriesKey
 from quantlab.domain.models import Candle, Instrument, Timeframe
 from quantlab.research.baseline import Breakout, BuyAndHold, FillModel, run_experiment
 
@@ -48,8 +48,11 @@ def candle(i: int, open_: str, high: str, low: str, close: str) -> Candle:
     )
 
 
+KEY = SeriesKey(venue="BINANCE", venue_symbol="BTCUSDT", timeframe=TF, source="binance")
+
+
 def events(candles: list[Candle], warmup: int = 0) -> list[ReplayEvent]:
-    return [ReplayEvent(candle=c, is_warmup=i < warmup) for i, c in enumerate(candles)]
+    return [ReplayEvent(candle=c, is_warmup=i < warmup, series=KEY) for i, c in enumerate(candles)]
 
 
 def test_execution_at_next_open_never_at_signal_close() -> None:

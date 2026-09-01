@@ -23,7 +23,15 @@ Guarantees
 - **Warm-up**: with a lookback window, history candles (close_time <= start)
   are emitted first with the clock pinned at `start` and flagged
   ``is_warmup=True`` — indicators can seed themselves, and a consumer can
-  never mistake warm-up for a decision-time candle.
+  never mistake warm-up for a decision-time candle. The guarantee is
+  **at most** the requested window: lookback is truncated at the dataset
+  start, so consumers must still handle a partially seeded indicator.
+
+Every event carries its SeriesKey (venue, venue_symbol, timeframe, source):
+multi-series consumers route on it instead of reverse-mapping instrument
+UUIDs. Pass a ReplayReport to get emitted/warm-up counts, effective bounds
+and verify/stream durations once the stream is exhausted — no consumer-side
+double bookkeeping.
 """
 
 from __future__ import annotations
@@ -69,12 +77,41 @@ class ReplayIntegrityError(Exception):
 
 
 @dataclass(frozen=True)
+class SeriesKey:
+    """Explicit series identity attached to every emitted event."""
+
+    venue: str
+    venue_symbol: str
+    timeframe: Timeframe
+    source: str
+
+
+@dataclass(frozen=True)
 class ReplayEvent:
     """One emitted candle. is_warmup marks lookback history (close_time <=
     replay start): seeding material, never a decision-time candle."""
 
     candle: Candle
     is_warmup: bool
+    series: SeriesKey
+
+
+@dataclass
+class ReplayReport:
+    """Filled by replay_candles while it runs; final once completed is True
+    (stream exhausted). Mid-stream reads see running counters."""
+
+    dataset_name: str = ""
+    version: str = ""
+    series: int = 0
+    start: datetime | None = None
+    end: datetime | None = None
+    lookback_start: datetime | None = None
+    verify_seconds: float = 0.0
+    stream_seconds: float = 0.0
+    emitted: int = 0
+    warmup: int = 0
+    completed: bool = False
 
 
 def replay_candles(
@@ -91,10 +128,13 @@ def replay_candles(
     start: datetime | None = None,
     end: datetime | None = None,
     lookback: timedelta | None = None,
+    report: ReplayReport | None = None,
 ) -> Iterator[ReplayEvent]:
     """Stream a published dataset's candles in availability order under a
     simulated clock. Generator: verification runs on first iteration; the
-    snapshot is held until the generator is exhausted or closed."""
+    snapshot is held until the generator is exhausted or closed. Pass a
+    ReplayReport to read counters and durations after exhaustion."""
+    rpt = report if report is not None else ReplayReport()
     dataset, entries = load_dataset_series(datasets, resolve, dataset_name, version)
     entries = _select(dataset, entries, symbols, timeframes)
 
@@ -107,9 +147,16 @@ def replay_candles(
             f"{dataset.end_time.isoformat()})"
         )
     lookback_start = start if lookback is None else max(dataset.start_time, start - lookback)
+    rpt.dataset_name = dataset.dataset_name
+    rpt.version = dataset.version
+    rpt.series = len(entries)
+    rpt.start = start
+    rpt.end = end
+    rpt.lookback_start = lookback_start
 
     with snapshot_factory() as candles:
         verify_seconds = _verify_all(candles, datasets, resolve, quality, audit, dataset, entries)
+        rpt.verify_seconds = verify_seconds
         audit.write(
             _event(
                 "REPLAY_STARTED",
@@ -135,12 +182,14 @@ def replay_candles(
         emitted = warmups = 0
         streamed_at = time.monotonic()
         try:
-            for _key, candle in merge(*streams):
+            for _key, candle, series in merge(*streams):
                 is_warmup = candle.close_time <= start
                 clock.advance_to(max(clock.now(), candle.close_time))
                 warmups += is_warmup
                 emitted += 1
-                yield ReplayEvent(candle=candle, is_warmup=is_warmup)
+                rpt.emitted = emitted
+                rpt.warmup = warmups
+                yield ReplayEvent(candle=candle, is_warmup=is_warmup, series=series)
         except Exception as exc:
             audit.write(
                 _event(
@@ -152,6 +201,8 @@ def replay_candles(
             )
             raise
         duration = time.monotonic() - streamed_at
+        rpt.stream_seconds = duration
+        rpt.completed = True
         audit.write(
             _event(
                 "REPLAY_COMPLETED",
@@ -251,12 +302,18 @@ def _series_stream(
     stored: DatasetSeries,
     lookback_start: datetime,
     end: datetime,
-) -> Iterator[tuple[tuple[datetime, timedelta, str, str], Candle]]:
-    """One series as (sort_key, candle), already ordered: close_time is
-    open_time + duration on a fixed grid, so open_time order IS close_time
-    order within a series. Emits candles with close_time in
+) -> Iterator[tuple[tuple[datetime, timedelta, str, str], Candle, SeriesKey]]:
+    """One series as (sort_key, candle, series_key), already ordered:
+    close_time is open_time + duration on a fixed grid, so open_time order IS
+    close_time order within a series. Emits candles with close_time in
     (lookback_start, end]."""
     duration = stored.timeframe.duration
+    key = SeriesKey(
+        venue=venue.code,
+        venue_symbol=instrument.venue_symbol,
+        timeframe=stored.timeframe,
+        source=stored.source,
+    )
     fetch_start = lookback_start - duration + timedelta(milliseconds=1)
     for batch in candles.stream_candles(
         instrument.instrument_id, stored.timeframe, stored.source, fetch_start, end
@@ -267,6 +324,7 @@ def _series_stream(
             yield (
                 (candle.close_time, duration, venue.code, instrument.venue_symbol),
                 candle,
+                key,
             )
 
 

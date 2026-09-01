@@ -19,7 +19,13 @@ from fakes import (
 from quantlab.core.clock import SimulatedClock
 from quantlab.core.ids import new_id
 from quantlab.data.datasets import DatasetError, SeriesResolver, freeze_dataset
-from quantlab.data.replay import ReplayEvent, ReplayIntegrityError, replay_candles
+from quantlab.data.replay import (
+    ReplayEvent,
+    ReplayIntegrityError,
+    ReplayReport,
+    SeriesKey,
+    replay_candles,
+)
 from quantlab.domain.models import Candle, DatasetSeries, Instrument, Timeframe, Venue
 
 T0 = datetime(2026, 8, 1, 0, 0, tzinfo=UTC)
@@ -299,3 +305,54 @@ def test_window_outside_dataset_rejected() -> None:
     live, datasets, quality, audit = build(full_day(BTC), [Timeframe.M1])
     with pytest.raises(ValueError, match="must sit inside"):
         run(live, datasets, quality, audit, end=DAY + timedelta(hours=1))
+
+
+def test_events_carry_series_identity() -> None:
+    live, datasets, quality, audit = build(
+        full_day(BTC) + full_day(ETH),
+        [Timeframe.M1, Timeframe.H1],
+        selections=[(VENUE, BTC), (VENUE, ETH)],
+    )
+    events, _ = run(live, datasets, quality, audit)
+
+    by_instrument = {BTC.instrument_id: "BTCUSDT", ETH.instrument_id: "ETHUSDT"}
+    for event in events:
+        assert event.series == SeriesKey(
+            venue="BINANCE",
+            venue_symbol=by_instrument[event.candle.instrument_id],
+            timeframe=event.candle.timeframe,
+            source=SOURCE,
+        )
+
+
+def test_replay_report_final_after_exhaustion() -> None:
+    live, datasets, quality, audit = build(full_day(BTC), [Timeframe.M1])
+    start = T0 + timedelta(hours=6)
+    report = ReplayReport()
+    clock = SimulatedClock(T0)
+    stream = replay_candles(
+        InMemorySnapshotFactory(live),
+        datasets,
+        Resolver(),
+        quality,
+        audit,
+        "rp",
+        "v1",
+        clock,
+        start=start,
+        lookback=timedelta(hours=2),
+        report=report,
+    )
+    next(stream)
+    assert not report.completed  # mid-stream: counters are running, not final
+    rest = list(stream)
+
+    assert report.completed
+    assert report.emitted == 1 + len(rest) == 120 + 18 * 60
+    assert report.warmup == 120
+    assert report.series == 1
+    assert report.start == start
+    assert report.end == DAY
+    assert report.lookback_start == start - timedelta(hours=2)
+    assert report.verify_seconds >= 0
+    assert report.stream_seconds >= 0

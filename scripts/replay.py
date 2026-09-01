@@ -14,14 +14,13 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-import time
 from datetime import UTC, datetime, timedelta
 
 from quantlab.core.clock import SimulatedClock
 from quantlab.core.config import AppConfig
 from quantlab.core.logging import configure_logging
 from quantlab.data.datasets import SeriesResolver
-from quantlab.data.replay import replay_candles
+from quantlab.data.replay import ReplayReport, replay_candles
 from quantlab.domain.models import Timeframe
 from quantlab.storage.postgres.adapter import (
     PostgresAuditEventWriter,
@@ -67,6 +66,7 @@ def main(argv: list[str]) -> int:
 
     start = parse_utc(args.start) if args.start else dataset.start_time
     clock = SimulatedClock(start)
+    report = ReplayReport()
     stream = replay_candles(
         PostgresCandleSnapshotFactory(url),
         datasets,
@@ -83,29 +83,26 @@ def main(argv: list[str]) -> int:
         start=parse_utc(args.start) if args.start else None,
         end=parse_utc(args.end) if args.end else None,
         lookback=timedelta(hours=args.lookback_hours) if args.lookback_hours else None,
+        report=report,
     )
 
-    launched = time.monotonic()
-    emitted = warmups = 0
-    first_at: float | None = None
+    shown = 0
     for event in stream:
-        if first_at is None:
-            first_at = time.monotonic()  # verify phase ends at first event
-        emitted += 1
-        warmups += event.is_warmup
-        if not args.benchmark and emitted <= 5:
+        if not args.benchmark and shown < 5:
+            shown += 1
             c = event.candle
             tag = "warmup " if event.is_warmup else ""
-            print(f"{tag}{c.timeframe.value} {c.open_time.isoformat()} close={c.close}")
+            print(
+                f"{tag}{event.series.venue_symbol} {c.timeframe.value} "
+                f"{c.open_time.isoformat()} close={c.close}"
+            )
 
-    done = time.monotonic()
-    verify_s = (first_at or done) - launched
-    stream_s = done - (first_at or done)
-    rate = round(emitted / stream_s) if stream_s > 0 else 0
+    rate = round(report.emitted / report.stream_seconds) if report.stream_seconds > 0 else 0
     print(
-        f"replayed {args.dataset}@{args.version}: {emitted} candles "
-        f"({warmups} warmup) — verify {verify_s:.1f}s, stream {stream_s:.1f}s, "
-        f"{rate} candles/s, clock ended at {clock.now().isoformat()}"
+        f"replayed {args.dataset}@{args.version}: {report.emitted} candles "
+        f"({report.warmup} warmup) — verify {report.verify_seconds:.1f}s, "
+        f"stream {report.stream_seconds:.1f}s, {rate} candles/s, "
+        f"clock ended at {clock.now().isoformat()}"
     )
     return 0
 
