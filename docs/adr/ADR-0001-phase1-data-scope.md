@@ -71,3 +71,61 @@ inclus, différés ou adaptés pour cette phase. Ce qui suit fige ces choix.
   préservent la provenance venue et évitent un moteur d'agrégation sans besoin actuel.
 - **Dumps publics `data.binance.vision` pour l'historique** : écarté — évite le rate
   limit mais ajoute un second parseur pour un gain unique (~30 min de téléchargement).
+
+---
+
+## Addendum A — Chemin live WebSocket (T8)
+
+**Statut : ACCEPTED — 2026-09-01** (tranche les points laissés ouverts par la
+décision 4 ; arbitrage de provenance amendé à la revue du plan T8)
+
+### A.1 Périmètre de l'archive brute
+
+Seuls les **messages kline fermés** (`k.x == true`) des streams souscrits
+sont archivés. Les updates intra-bougie ne produisent aucune bougie
+canonique, n'ont aucun consommateur en Phase 1 et multiplieraient le volume
+par ~60 ; seul le message fermé constitue la preuve irrécupérable de ce que
+la venue a poussé.
+
+### A.2 Support : table PostgreSQL `raw_ws_messages`
+
+Table append-only (trigger `forbid_mutation`), et non JSONL : même infra de
+migration, de sauvegarde (`make backup`), d'immutabilité et d'audit que le
+reste ; requêtable pour rejouer le pipeline d'ingestion (docs/03 §9).
+Volume attendu ≈ 20 k messages/jour pour 12 streams (quelques Mo/jour).
+**Condition de révision :** rotation/compression si le volume dégrade les
+sauvegardes ou les requêtes.
+
+**L'archive ne déduplique pas.** C'est un journal brut de ce que la venue a
+poussé, pas une table métier : un kline fermé reçu deux fois (re-livraison
+après reconnexion, replays du serveur) est archivé deux fois, horodaté à
+chaque réception. La déduplication appartient au chemin candles
+(ON CONFLICT sur l'unicité métier), pas au journal.
+
+### A.3 Provenance : jamais de source mensongère
+
+- Le flux WS écrit `source='binance_ws'`, exclusivement à partir de
+  messages WS.
+- Après une coupure, les bougies manquées sont récupérées par REST et
+  insérées avec **leur vraie provenance : `source='binance'`**.
+  `data_version` garde son sens documenté (révision de données venue) et
+  n'est pas détourné en marqueur de réconciliation.
+- La série `binance_ws` **conserve son trou**, enregistré comme
+  DataQualityEvent **`WS_OUTAGE`** (début, fin, bougies manquées par
+  série) — mesure opérationnelle de la fiabilité du flux.
+- La continuité de lecture est fournie par la vue **`candles_canonical`** :
+  une bougie par (instrument, timeframe, open_time), précédence
+  `'binance'` puis `'binance_ws'`.
+
+### A.4 Partage des rôles de lecture
+
+```text
+recherche / datasets / replay  →  candles WHERE source='binance' (REST pur)
+consommateurs live             →  candles_canonical (continuité, précédence REST)
+contrôle qualité croisé (§5)   →  binance vs binance_ws, purs tous les deux,
+                                  sans liste d'exclusions à connaître
+```
+
+Le contrôle croisé de la décision 5 compare ainsi naturellement du pur WS à
+du pur REST : les patchs de réconciliation vivent dans la série REST, où
+est leur place.
