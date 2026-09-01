@@ -541,6 +541,26 @@ class PostgresDatasetRepository:
         return [_row_to_dataset(r) for r in rows]
 
 
+class PostgresRawWsMessageWriter:
+    def __init__(self, conninfo: str) -> None:
+        self._conninfo = conninfo
+
+    def insert(
+        self,
+        message_id: uuid.UUID,
+        received_at: datetime,
+        stream: str,
+        payload: dict[str, Any],
+    ) -> None:
+        query = """
+            INSERT INTO raw_ws_messages (message_id, received_at, stream, payload)
+            VALUES (%s, %s, %s, %s)
+        """
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(query, (message_id, received_at, stream, json.dumps(payload)))
+            conn.commit()
+
+
 class PostgresAuditEventWriter:
     def __init__(self, conninfo: str) -> None:
         self._conninfo = conninfo

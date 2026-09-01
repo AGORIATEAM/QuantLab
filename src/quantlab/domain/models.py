@@ -148,6 +148,7 @@ class QualityCode(StrEnum):
     OUT_OF_ORDER = "OUT_OF_ORDER"
     STALE_DATA = "STALE_DATA"
     INVALID_CANDLE = "INVALID_CANDLE"
+    WS_OUTAGE = "WS_OUTAGE"
 
 
 class DataQualityEvent(FrozenModel):

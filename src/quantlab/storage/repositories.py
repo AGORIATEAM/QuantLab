@@ -11,7 +11,7 @@ from collections.abc import Iterator, Sequence
 from contextlib import AbstractContextManager
 from datetime import datetime
 from decimal import Decimal
-from typing import Protocol
+from typing import Any, Protocol
 
 from quantlab.audit.events import AuditEvent
 from quantlab.domain.models import (
@@ -121,6 +121,19 @@ class CandleRepository(Protocol):
         and trailing holes are all reported; `start` and `end` must sit on the
         timeframe grid. An empty series yields the single hole [start, end)."""
         ...
+
+
+class RawWsMessageWriter(Protocol):
+    """Append-only journal of raw WebSocket messages (ADR-0001 A.2): no
+    deduplication, everything the venue pushed is kept as pushed."""
+
+    def insert(
+        self,
+        message_id: uuid.UUID,
+        received_at: datetime,
+        stream: str,
+        payload: dict[str, Any],
+    ) -> None: ...
 
 
 class CandleSnapshotFactory(Protocol):

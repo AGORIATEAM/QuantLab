@@ -73,6 +73,26 @@ class RawKline:
             taker_buy_quote_volume=_expect_decimal_str(row[10], "taker_buy_quote_volume"),
         )
 
+    @classmethod
+    def from_ws(cls, kline: object) -> RawKline:
+        """The `k` object of a WebSocket kline event — same fields as the
+        REST array, keyed (t/T/o/h/l/c/v/q/n/V/Q), same strict parsing."""
+        if not isinstance(kline, dict):
+            raise MalformedPayloadError(f"ws kline must be an object, got {kline!r}")
+        return cls(
+            open_time_ms=_expect_int(kline.get("t"), "t"),
+            open=_expect_decimal_str(kline.get("o"), "o"),
+            high=_expect_decimal_str(kline.get("h"), "h"),
+            low=_expect_decimal_str(kline.get("l"), "l"),
+            close=_expect_decimal_str(kline.get("c"), "c"),
+            volume=_expect_decimal_str(kline.get("v"), "v"),
+            close_time_ms=_expect_int(kline.get("T"), "T"),
+            quote_volume=_expect_decimal_str(kline.get("q"), "q"),
+            trade_count=_expect_int(kline.get("n"), "n"),
+            taker_buy_base_volume=_expect_decimal_str(kline.get("V"), "V"),
+            taker_buy_quote_volume=_expect_decimal_str(kline.get("Q"), "Q"),
+        )
+
 
 @dataclass(frozen=True)
 class SymbolInfo:

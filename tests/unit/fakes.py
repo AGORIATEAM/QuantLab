@@ -208,6 +208,22 @@ class GridSource:
         return True
 
 
+class InMemoryRawWsMessages:
+    """RawWsMessageWriter double — a plain journal, duplicates kept."""
+
+    def __init__(self) -> None:
+        self.rows: list[tuple[uuid.UUID, datetime, str, dict[str, object]]] = []
+
+    def insert(
+        self,
+        message_id: uuid.UUID,
+        received_at: datetime,
+        stream: str,
+        payload: dict[str, object],
+    ) -> None:
+        self.rows.append((message_id, received_at, stream, payload))
+
+
 class InMemorySnapshotFactory:
     """CandleSnapshotFactory double: the yielded repository is a copy taken
     at entry — inserts into the live repository during iteration are
