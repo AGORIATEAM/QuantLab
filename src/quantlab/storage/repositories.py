@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator, Sequence
+from contextlib import AbstractContextManager
 from datetime import datetime
 from decimal import Decimal
 from typing import Protocol
@@ -94,6 +95,19 @@ class CandleRepository(Protocol):
         ever being materialized as domain models."""
         ...
 
+    def stream_candles(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+        batch_size: int = 50_000,
+    ) -> Iterator[Sequence[Candle]]:
+        """Full domain candles of [start, end) ordered by open_time, streamed
+        in batches — the replay read path."""
+        ...
+
     def missing_ranges(
         self,
         instrument_id: uuid.UUID,
@@ -107,6 +121,16 @@ class CandleRepository(Protocol):
         and trailing holes are all reported; `start` and `end` must sit on the
         timeframe grid. An empty series yields the single hole [start, end)."""
         ...
+
+
+class CandleSnapshotFactory(Protocol):
+    """Opens a read-only, point-in-time view of the candle store. Everything
+    executed against the yielded repository — integrity verification AND the
+    streaming cursors of a replay — sees one single consistent snapshot,
+    even while concurrent inserts land (PostgreSQL: one REPEATABLE READ
+    transaction). The snapshot lives until the context exits."""
+
+    def __call__(self) -> AbstractContextManager[CandleRepository]: ...
 
 
 class DatasetRepository(Protocol):

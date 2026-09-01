@@ -9,6 +9,7 @@ from __future__ import annotations
 import json
 import uuid
 from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from datetime import datetime
 from typing import Any
 
@@ -122,10 +123,29 @@ class PostgresInstrumentRepository:
 
 
 class PostgresCandleRepository:
-    def __init__(self, conninfo: str) -> None:
+    """Candle store adapter. With `connection`, every method runs on that
+    shared connection/transaction (the snapshot path — read-only); otherwise
+    each call opens its own connection."""
+
+    def __init__(
+        self, conninfo: str = "", *, connection: psycopg.Connection[Any] | None = None
+    ) -> None:
+        if not conninfo and connection is None:
+            raise ValueError("either conninfo or connection is required")
         self._conninfo = conninfo
+        self._connection = connection
+
+    @contextmanager
+    def _conn(self) -> Iterator[psycopg.Connection[Any]]:
+        if self._connection is not None:
+            yield self._connection
+        else:
+            with psycopg.connect(self._conninfo) as conn:
+                yield conn
 
     def insert_many(self, candles: Sequence[Candle]) -> int:
+        if self._connection is not None:
+            raise RuntimeError("snapshot repository is read-only")
         if not candles:
             return 0
         query = """
@@ -173,7 +193,7 @@ class PostgresCandleRepository:
             SELECT MAX(open_time) FROM candles
             WHERE instrument_id = %s AND timeframe = %s AND source = %s
         """
-        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+        with self._conn() as conn, conn.cursor() as cur:
             cur.execute(query, (instrument_id, timeframe.value, source))
             row = cur.fetchone()
         return row[0] if row is not None else None
@@ -191,7 +211,7 @@ class PostgresCandleRepository:
             WHERE instrument_id = %s AND timeframe = %s AND source = %s
               AND open_time >= %s AND open_time < %s
         """
-        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+        with self._conn() as conn, conn.cursor() as cur:
             cur.execute(query, (instrument_id, timeframe.value, source, start, end))
             row = cur.fetchone()
         return int(row[0]) if row is not None else 0
@@ -213,7 +233,7 @@ class PostgresCandleRepository:
             ORDER BY open_time ASC
         """
         # Named cursor = server-side: rows travel in batches, never all at once.
-        with psycopg.connect(self._conninfo) as conn:
+        with self._conn() as conn:
             with conn.cursor(name=f"candle_stream_{new_id().hex}") as cur:
                 cur.execute(query, (instrument_id, timeframe.value, source, start, end))
                 while True:
@@ -221,6 +241,54 @@ class PostgresCandleRepository:
                     if not rows:
                         break
                     yield rows
+
+    def stream_candles(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+        batch_size: int = 50_000,
+    ) -> Iterator[Sequence[Candle]]:
+        query = """
+            SELECT candle_id, instrument_id, timeframe, open_time, close_time,
+                   open, high, low, close, volume, trade_count, source, data_version
+            FROM candles
+            WHERE instrument_id = %s AND timeframe = %s AND source = %s
+              AND open_time >= %s AND open_time < %s
+            ORDER BY open_time ASC
+        """
+        tf = timeframe  # single Timeframe object reused for every row
+        with self._conn() as conn:
+            with conn.cursor(name=f"candle_full_stream_{new_id().hex}") as cur:
+                cur.execute(query, (instrument_id, timeframe.value, source, start, end))
+                while True:
+                    rows = cur.fetchmany(batch_size)
+                    if not rows:
+                        break
+                    # model_construct skips pydantic validation: these rows
+                    # come from a CHECK-constrained store that is hash-verified
+                    # at replay startup; re-validating millions of candles is
+                    # pure cost (T7).
+                    yield [
+                        Candle.model_construct(
+                            candle_id=r[0],
+                            instrument_id=r[1],
+                            timeframe=tf,
+                            open_time=r[3],
+                            close_time=r[4],
+                            open=r[5],
+                            high=r[6],
+                            low=r[7],
+                            close=r[8],
+                            volume=r[9],
+                            trade_count=r[10],
+                            source=r[11],
+                            data_version=r[12],
+                        )
+                        for r in rows
+                    ]
 
     def missing_ranges(
         self,
@@ -261,7 +329,7 @@ class PostgresCandleRepository:
             "end": end,
             "step": step,
         }
-        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+        with self._conn() as conn, conn.cursor() as cur:
             cur.execute(interior_query, params)
             interior = [(r[0], r[1]) for r in cur.fetchall()]
             cur.execute(bounds_query, (instrument_id, timeframe.value, source, start, end))
@@ -291,7 +359,7 @@ class PostgresCandleRepository:
               AND open_time >= %s AND open_time < %s
             ORDER BY open_time ASC
         """
-        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+        with self._conn() as conn, conn.cursor() as cur:
             cur.execute(query, (instrument_id, timeframe.value, start, end))
             rows = cur.fetchall()
         return [
@@ -384,6 +452,26 @@ class PostgresDataQualityEventRepository:
             cur.execute(query, (resolved_at, event_id))
             conn.commit()
             return cur.rowcount == 1
+
+
+class PostgresCandleSnapshotFactory:
+    """CandleSnapshotFactory over one read-only REPEATABLE READ transaction:
+    the snapshot is taken at the first query and every read through the
+    yielded repository — verification and streaming cursors alike — sees that
+    same point-in-time view until the context exits (T7 amendement 2)."""
+
+    def __init__(self, conninfo: str) -> None:
+        self._conninfo = conninfo
+
+    @contextmanager
+    def __call__(self) -> Iterator[PostgresCandleRepository]:
+        with psycopg.connect(self._conninfo) as conn:
+            conn.isolation_level = psycopg.IsolationLevel.REPEATABLE_READ
+            conn.read_only = True
+            try:
+                yield PostgresCandleRepository(connection=conn)
+            finally:
+                conn.rollback()
 
 
 _DATASET_COLUMNS = """

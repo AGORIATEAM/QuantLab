@@ -266,7 +266,7 @@ def verify_dataset(
     """Fail-closed integrity check: per-series candle counts first (cheap —
     any late insertion or deletion fails here without hashing), then the
     per-series hashes, then the global hash by construction."""
-    dataset, entries = _load(datasets, resolve, dataset_name, version)
+    dataset, entries = load_dataset_series(datasets, resolve, dataset_name, version)
     mismatches = _check_counts(candles, entries)
     if not mismatches:
         for stored, venue, instrument in entries:
@@ -306,7 +306,7 @@ def verify_series(
 ) -> VerifyReport:
     """Verify a single series of a dataset — what T7's replay calls to check
     only the series it is about to stream."""
-    dataset, entries = _load(datasets, resolve, dataset_name, version)
+    dataset, entries = load_dataset_series(datasets, resolve, dataset_name, version)
     entries = [
         e for e in entries if e[0].venue_symbol == venue_symbol and e[0].timeframe == timeframe
     ]
@@ -359,7 +359,7 @@ class SeriesResolver:
         return venue, instrument
 
 
-def _load(
+def load_dataset_series(
     datasets: DatasetRepository,
     resolve: SeriesResolver,
     dataset_name: str,

@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import uuid
 from collections.abc import Iterator, Sequence
+from contextlib import contextmanager
 from datetime import datetime
 
 from quantlab.audit.events import AuditEvent
@@ -144,6 +145,19 @@ class InMemoryCandles:
         for i in range(0, len(rows), batch_size):
             yield rows[i : i + batch_size]
 
+    def stream_candles(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+        batch_size: int = 50_000,
+    ) -> Iterator[Sequence[Candle]]:
+        rows = self._rows_in_range(instrument_id, timeframe, source, start, end)
+        for i in range(0, len(rows), batch_size):
+            yield rows[i : i + batch_size]
+
     def missing_ranges(
         self,
         instrument_id: uuid.UUID,
@@ -192,6 +206,21 @@ class GridSource:
 
     def health_check(self) -> bool:
         return True
+
+
+class InMemorySnapshotFactory:
+    """CandleSnapshotFactory double: the yielded repository is a copy taken
+    at entry — inserts into the live repository during iteration are
+    invisible, mirroring the REPEATABLE READ snapshot."""
+
+    def __init__(self, live: InMemoryCandles) -> None:
+        self._live = live
+
+    @contextmanager
+    def __call__(self) -> Iterator[InMemoryCandles]:
+        frozen = InMemoryCandles()
+        frozen.rows = dict(self._live.rows)
+        yield frozen
 
 
 class InMemoryDatasets:
