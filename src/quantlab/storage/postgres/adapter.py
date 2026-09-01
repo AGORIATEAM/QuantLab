@@ -8,16 +8,18 @@ from __future__ import annotations
 
 import json
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from datetime import datetime
 from typing import Any
 
 import psycopg
 
 from quantlab.audit.events import AuditEvent
+from quantlab.core.ids import new_id
 from quantlab.domain.models import (
     Candle,
     DataQualityEvent,
+    Dataset,
     Instrument,
     InstrumentStatus,
     QualityCode,
@@ -25,6 +27,7 @@ from quantlab.domain.models import (
     Timeframe,
     Venue,
 )
+from quantlab.storage.repositories import CandleRow
 
 
 class PostgresVenueRepository:
@@ -174,6 +177,50 @@ class PostgresCandleRepository:
             cur.execute(query, (instrument_id, timeframe.value, source))
             row = cur.fetchone()
         return row[0] if row is not None else None
+
+    def count_range(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+    ) -> int:
+        query = """
+            SELECT count(*) FROM candles
+            WHERE instrument_id = %s AND timeframe = %s AND source = %s
+              AND open_time >= %s AND open_time < %s
+        """
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(query, (instrument_id, timeframe.value, source, start, end))
+            row = cur.fetchone()
+        return int(row[0]) if row is not None else 0
+
+    def stream_candle_rows(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+        batch_size: int = 50_000,
+    ) -> Iterator[Sequence[CandleRow]]:
+        query = """
+            SELECT open_time, open, high, low, close, volume, trade_count
+            FROM candles
+            WHERE instrument_id = %s AND timeframe = %s AND source = %s
+              AND open_time >= %s AND open_time < %s
+            ORDER BY open_time ASC
+        """
+        # Named cursor = server-side: rows travel in batches, never all at once.
+        with psycopg.connect(self._conninfo) as conn:
+            with conn.cursor(name=f"candle_stream_{new_id().hex}") as cur:
+                cur.execute(query, (instrument_id, timeframe.value, source, start, end))
+                while True:
+                    rows = cur.fetchmany(batch_size)
+                    if not rows:
+                        break
+                    yield rows
 
     def missing_ranges(
         self,
@@ -337,6 +384,73 @@ class PostgresDataQualityEventRepository:
             cur.execute(query, (resolved_at, event_id))
             conn.commit()
             return cur.rowcount == 1
+
+
+_DATASET_COLUMNS = """
+    dataset_id, dataset_name, version, storage_uri, content_hash, source,
+    start_time, end_time, status, metadata, created_at
+"""
+
+
+def _row_to_dataset(row: tuple[Any, ...]) -> Dataset:
+    return Dataset(
+        dataset_id=row[0],
+        dataset_name=row[1],
+        version=row[2],
+        storage_uri=row[3],
+        content_hash=row[4],
+        source=row[5],
+        start_time=row[6],
+        end_time=row[7],
+        status=row[8],
+        metadata=row[9],
+        created_at=row[10],
+    )
+
+
+class PostgresDatasetRepository:
+    def __init__(self, conninfo: str) -> None:
+        self._conninfo = conninfo
+
+    def insert(self, dataset: Dataset) -> None:
+        query = """
+            INSERT INTO datasets (
+                dataset_id, dataset_name, version, storage_uri, content_hash,
+                source, start_time, end_time, status, metadata
+            )
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        """
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(
+                query,
+                (
+                    dataset.dataset_id,
+                    dataset.dataset_name,
+                    dataset.version,
+                    dataset.storage_uri,
+                    dataset.content_hash,
+                    dataset.source,
+                    dataset.start_time,
+                    dataset.end_time,
+                    dataset.status,
+                    json.dumps(dataset.metadata) if dataset.metadata is not None else None,
+                ),
+            )
+            conn.commit()
+
+    def get(self, dataset_name: str, version: str) -> Dataset | None:
+        query = f"SELECT {_DATASET_COLUMNS} FROM datasets WHERE dataset_name = %s AND version = %s"
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(query, (dataset_name, version))
+            row = cur.fetchone()
+        return None if row is None else _row_to_dataset(row)
+
+    def list_all(self) -> list[Dataset]:
+        query = f"SELECT {_DATASET_COLUMNS} FROM datasets ORDER BY created_at ASC"
+        with psycopg.connect(self._conninfo) as conn, conn.cursor() as cur:
+            cur.execute(query)
+            rows = cur.fetchall()
+        return [_row_to_dataset(r) for r in rows]
 
 
 class PostgresAuditEventWriter:

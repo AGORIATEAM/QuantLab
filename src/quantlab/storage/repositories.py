@@ -7,8 +7,9 @@ Business code depends on these Protocols, never on a storage vendor directly
 from __future__ import annotations
 
 import uuid
-from collections.abc import Sequence
+from collections.abc import Iterator, Sequence
 from datetime import datetime
+from decimal import Decimal
 from typing import Protocol
 
 from quantlab.audit.events import AuditEvent
@@ -16,11 +17,16 @@ from quantlab.domain.models import (
     Asset,
     Candle,
     DataQualityEvent,
+    Dataset,
     Instrument,
     QualityCode,
     Timeframe,
     Venue,
 )
+
+# (open_time, open, high, low, close, volume, trade_count) — the market
+# content of one candle, as stored. Used by the dataset hash stream.
+CandleRow = tuple[datetime, Decimal, Decimal, Decimal, Decimal, Decimal, int | None]
 
 
 class AssetRepository(Protocol):
@@ -63,6 +69,31 @@ class CandleRepository(Protocol):
         the historical download (derived from data, never from job state)."""
         ...
 
+    def count_range(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+    ) -> int:
+        """Number of stored candles with open_time in [start, end)."""
+        ...
+
+    def stream_candle_rows(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+        batch_size: int = 50_000,
+    ) -> Iterator[Sequence[CandleRow]]:
+        """Market content of [start, end) ordered by open_time, streamed in
+        batches (server-side cursor): millions of rows are hashed without
+        ever being materialized as domain models."""
+        ...
+
     def missing_ranges(
         self,
         instrument_id: uuid.UUID,
@@ -75,6 +106,19 @@ class CandleRepository(Protocol):
         the stored series over [start, end), oldest first. Leading, interior
         and trailing holes are all reported; `start` and `end` must sit on the
         timeframe grid. An empty series yields the single hole [start, end)."""
+        ...
+
+
+class DatasetRepository(Protocol):
+    def insert(self, dataset: Dataset) -> None:
+        """Publish a dataset. (dataset_name, version) is unique and the row
+        is immutable once written (append-only trigger)."""
+        ...
+
+    def get(self, dataset_name: str, version: str) -> Dataset | None: ...
+
+    def list_all(self) -> list[Dataset]:
+        """All published datasets, oldest first."""
         ...
 
 

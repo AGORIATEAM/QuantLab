@@ -174,6 +174,42 @@ class DataQualityEvent(FrozenModel):
         return None if value is None else require_utc(value)
 
 
+class DatasetSeries(FrozenModel):
+    """One candle series inside a dataset: the (venue, symbol, timeframe,
+    source, range) selection plus its frozen count and sub-hash."""
+
+    venue: str
+    venue_symbol: str
+    timeframe: Timeframe
+    source: str
+    start: datetime
+    end: datetime
+    candle_count: int
+    series_hash: str
+
+    @field_validator("start", "end")
+    @classmethod
+    def _utc_bounds(cls, value: datetime) -> datetime:
+        return require_utc(value)
+
+
+class Dataset(FrozenModel):
+    """A published, immutable, hash-verified logical selection of candles
+    (docs/23 §150, ADR-0001 décision 2). Series details live in metadata."""
+
+    dataset_id: uuid.UUID
+    dataset_name: str
+    version: str
+    storage_uri: str
+    content_hash: str
+    source: str
+    start_time: datetime
+    end_time: datetime
+    status: str = "published"
+    metadata: dict[str, Any] | None = None
+    created_at: datetime | None = None
+
+
 class StrategyStatus(StrEnum):
     DRAFT = "draft"
     RESEARCH = "research"

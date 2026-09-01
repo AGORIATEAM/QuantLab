@@ -4,10 +4,19 @@ not the internal logic — docs/17 §78)."""
 from __future__ import annotations
 
 import uuid
+from collections.abc import Iterator, Sequence
 from datetime import datetime
 
 from quantlab.audit.events import AuditEvent
-from quantlab.domain.models import Candle, DataQualityEvent, Instrument, QualityCode, Timeframe
+from quantlab.domain.models import (
+    Candle,
+    DataQualityEvent,
+    Dataset,
+    Instrument,
+    QualityCode,
+    Timeframe,
+)
+from quantlab.storage.repositories import CandleRow
 
 
 class InMemoryQualityEvents:
@@ -89,6 +98,52 @@ class InMemoryCandles:
         ]
         return max(times) if times else None
 
+    def _rows_in_range(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+    ) -> list[Candle]:
+        return sorted(
+            (
+                c
+                for c in self.rows.values()
+                if c.instrument_id == instrument_id
+                and c.timeframe == timeframe
+                and c.source == source
+                and start <= c.open_time < end
+            ),
+            key=lambda c: c.open_time,
+        )
+
+    def count_range(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+    ) -> int:
+        return len(self._rows_in_range(instrument_id, timeframe, source, start, end))
+
+    def stream_candle_rows(
+        self,
+        instrument_id: uuid.UUID,
+        timeframe: Timeframe,
+        source: str,
+        start: datetime,
+        end: datetime,
+        batch_size: int = 50_000,
+    ) -> Iterator[Sequence[CandleRow]]:
+        rows = [
+            (c.open_time, c.open, c.high, c.low, c.close, c.volume, c.trade_count)
+            for c in self._rows_in_range(instrument_id, timeframe, source, start, end)
+        ]
+        for i in range(0, len(rows), batch_size):
+            yield rows[i : i + batch_size]
+
     def missing_ranges(
         self,
         instrument_id: uuid.UUID,
@@ -137,6 +192,25 @@ class GridSource:
 
     def health_check(self) -> bool:
         return True
+
+
+class InMemoryDatasets:
+    """DatasetRepository double with the same uniqueness rule as the table."""
+
+    def __init__(self) -> None:
+        self.rows: dict[tuple[str, str], Dataset] = {}
+
+    def insert(self, dataset: Dataset) -> None:
+        key = (dataset.dataset_name, dataset.version)
+        if key in self.rows:
+            raise ValueError(f"duplicate dataset {key}")
+        self.rows[key] = dataset
+
+    def get(self, dataset_name: str, version: str) -> Dataset | None:
+        return self.rows.get((dataset_name, version))
+
+    def list_all(self) -> list[Dataset]:
+        return list(self.rows.values())
 
 
 class RecordingAudit:
