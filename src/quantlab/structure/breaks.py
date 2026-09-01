@@ -18,9 +18,11 @@ Precise semantics (§41):
   armed swing per side to keep the journal readable.
 - **Kind** (§18, §22-§23): a validated break in the direction of the
   dominant structure is a BOS; against it, a CHOCH. With no dominant
-  structure (NEUTRAL/UNKNOWN) a validated break is labelled BOS with its
-  direction — a CHoCH requires an opposite dominant structure to exist.
-  Breaks are events only: the state machine never reads them (règle 3).
+  structure (NEUTRAL/UNKNOWN) neither term applies per docs/06 — §18
+  defines a BOS relative to the dominant structure — so the event is
+  labelled BREAK_UNCLASSIFIED (amendement EXP-003: a NEUTRAL-state break
+  is not a BOS). Breaks are events only: the state machine never reads
+  them (règle 3).
 """
 
 from __future__ import annotations
@@ -39,6 +41,7 @@ class BreakKind(StrEnum):
     BOS = "BOS"
     CHOCH = "CHOCH"
     WICK_BREAK = "WICK_BREAK"
+    BREAK_UNCLASSIFIED = "BREAK_UNCLASSIFIED"  # validated break without dominant structure
 
 
 class BreakDirection(StrEnum):
@@ -130,7 +133,12 @@ class BreakDetector:
 
         if validated:
             self._armed[kind] = None  # consumed: one level breaks once (règle 4)
-            kind_out = BreakKind.BOS if with_structure or not against_structure else BreakKind.CHOCH
+            if with_structure:
+                kind_out = BreakKind.BOS
+            elif against_structure:
+                kind_out = BreakKind.CHOCH
+            else:
+                kind_out = BreakKind.BREAK_UNCLASSIFIED
             return BreakEvent(
                 kind=kind_out,
                 direction=direction,

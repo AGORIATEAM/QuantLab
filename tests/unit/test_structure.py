@@ -225,8 +225,8 @@ def test_break_kind_depends_on_dominant_structure() -> None:
     for state, expected in [
         (StructureState.BULLISH, BreakKind.BOS),
         (StructureState.BEARISH, BreakKind.CHOCH),
-        (StructureState.NEUTRAL, BreakKind.BOS),  # no opposite dominant structure
-        (StructureState.UNKNOWN, BreakKind.BOS),
+        (StructureState.NEUTRAL, BreakKind.BREAK_UNCLASSIFIED),  # §18: no dominant structure
+        (StructureState.UNKNOWN, BreakKind.BREAK_UNCLASSIFIED),
     ]:
         detector = BreakDetector(ValidationMethod.CLOSE)
         detector.arm(swing(SwingKind.HIGH, "100"))

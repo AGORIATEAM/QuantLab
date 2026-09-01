@@ -17,7 +17,10 @@
   "parent_experiment_id": null,
   "baseline_experiment_id": "EXP-20260901-002",
   "config": {
-    "instruments": ["BTCUSDT", "ETHUSDT"],
+    "instruments": [
+      "BTCUSDT",
+      "ETHUSDT"
+    ],
     "note_instruments": "ADR-0002 décision 5 : les deux instruments sont requis; une hypothèse qui ne tient que sur un seul est réfutée.",
     "rules": {
       "direction": "état de structure 1h (BULLISH -> longs seulement, BEARISH -> shorts seulement)",
@@ -25,7 +28,14 @@
       "entry": "BOS 5m validé dans la direction 1h, exécuté à l'open de la bougie 5m suivante",
       "stop": "dernier swing 5m opposé (swing low pour un long, swing high pour un short)",
       "exit": "cible en R (voisinage ci-dessous) OU CHoCH 5m contre la position",
-      "sizing": "risque fixe 0.5% de l'equity par trade (distance d'entrée au stop)"
+      "sizing": "risque fixe 0.5% de l'equity par trade (distance d'entrée au stop)",
+      "fill_ambiguities": {
+        "same_candle_stop_and_target": "stop first (pessimistic)",
+        "gap_beyond_stop": "exit at the open, not at the stop level",
+        "position": "one max per symbol, no pyramiding, signals ignored while in position",
+        "sizing_cap": "notional capped at 1x equity (spot, zero leverage); capped trades reported"
+      },
+      "min_stop_filter": "if stop distance at signal < min_stop_atr x ATR_5m -> trade SKIPPED (never widened)"
     },
     "timeframes": {
       "decision": "5m",
@@ -33,10 +43,33 @@
       "per_adr": "ADR-0002 décision 2"
     },
     "parameter_neighborhoods": {
-      "n_5m": [2, 3],
-      "n_1h": [3, 5],
-      "atr_multiplier": [1.5, 2, 3],
-      "breakout_buffer_atr": [0, 0.1]
+      "n_5m": [
+        2,
+        3
+      ],
+      "n_1h": [
+        3,
+        5,
+        8
+      ],
+      "atr_multiplier": [
+        1.5,
+        2,
+        3
+      ],
+      "breakout_buffer_atr": [
+        0,
+        0.1
+      ],
+      "min_stop_atr": [
+        0,
+        0.5
+      ],
+      "r_target": [
+        1.5,
+        2,
+        3
+      ]
     },
     "windows": {
       "in_sample": "[2017-08-17, 2023-01-01)",
@@ -64,11 +97,46 @@
     "fees_paid",
     "exposure_pct",
     "sharpe_annualized",
-    "comparison_vs_EXP-20260901-001_and_002"
+    "comparison_vs_EXP-20260901-001_and_002",
+    "avg_cost_r",
+    "avg_stop_distance_pct",
+    "trades_per_day",
+    "capped_trades_share",
+    "pct_time_neutral_1h",
+    "h1_state_changes_per_week"
   ],
   "acceptance_criteria": "Réfutation (fixée au pré-enregistrement) : H1 est REJETÉE si, en out-of-sample, l'espérance nette par trade est <= 0 OU le profit factor < 1.15 sur l'UN des deux instruments, OU si les résultats s'inversent dans un voisinage de paramètres déclaré.",
   "results": null,
   "decision": null,
   "artifacts": [],
-  "notes": "Pré-enregistré avant toute exécution (ADR-0002 décision 5, docs/21). L'exécution requiert : Market Structure Engine minimal (plan validé), puis validation utilisateur de ce pré-enregistrement. Ne pas exécuter avant."
+  "notes": "Pré-enregistré avant toute exécution (ADR-0002 décision 5, docs/21). L'exécution requiert : Market Structure Engine minimal (plan validé), puis validation utilisateur de ce pré-enregistrement. Ne pas exécuter avant.",
+  "amendments": [
+    {
+      "date": "2026-09-01",
+      "amended_before_any_execution": true,
+      "changes": [
+        {
+          "what": "Fill model ambiguities resolved pessimistically: (a) stop and target touched within the same 5m candle -> the stop is deemed hit first; (b) next open gapping beyond the stop -> exit fills at the OPEN, not at the stop level; (c) one position max per symbol, no pyramiding, signals ignored while in position; (d) size = 0.5% equity / stop distance, capped at 1x equity notional (spot, zero leverage), with the share of capped trades reported.",
+          "why": "Toute ambiguïté du modèle d'exécution doit être tranchée contre la stratégie avant l'exécution — jamais découverte pendant."
+        },
+        {
+          "what": "n_1h neighborhood extended {3,5} -> {3,5,8}.",
+          "why": "La table de densités 2024 (demo MSE) montre 2.8-4.4 swings/jour en 1h aux points existants : le contexte 1h peut changer d'état quotidiennement ; un point plus stable (n=8) est ajouté au voisinage. Motivé par la densité, pas optimisé sur un résultat."
+        },
+        {
+          "what": "min_stop_atr neighborhood added {0, 0.5}: if the stop distance at signal is < 0.5 x ATR_5m the trade is SKIPPED (never widened).",
+          "why": "Coûts fixes ~0.22%/aller-retour vs stops 5m typiques de 0.3-0.6% -> les frais dépassent 0.5 R sur les stops les plus serrés. Le voisinage sépare un échec du SIGNAL d'un échec de MICROSTRUCTURE DES COÛTS."
+        },
+        {
+          "what": "Metrics added per configuration: avg cost in R, avg stop distance %, trades/day, share of size-capped trades, % time in NEUTRAL 1h, 1h state changes per week.",
+          "why": "Nécessaires pour diagnostiquer le mécanisme d'un éventuel échec (coûts, contexte instable, cap de taille) au lieu d'un verdict opaque."
+        },
+        {
+          "what": "Semantics: a validated break emitted while the state is NEUTRAL/UNKNOWN is labelled BREAK_UNCLASSIFIED (engine change) — it is NOT a BOS per docs/06 §18 (dominant structure required). H1 entries only ever consume strict BOS events, so no impact on the rules.",
+          "why": "Suppression d'une ambiguïté de vocabulaire relevée à la revue de la table de densités."
+        }
+      ],
+      "refutation_criteria": "UNCHANGED"
+    }
+  ]
 }
