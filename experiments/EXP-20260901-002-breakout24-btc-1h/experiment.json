@@ -1,0 +1,56 @@
+{
+  "experiment_id": "EXP-20260901-002",
+  "title": "Baseline breakout BTCUSDT 1h",
+  "status": "COMPLETED",
+  "owner": "quantlab",
+  "created_at": "2026-09-01T07:13:48.647413+00:00",
+  "hypothesis": "Baseline (docs/21 \u00a721): naive 24-candle breakout on BTCUSDT 1h (close above the highest high of the N candles strictly before the decision candle -> long; below their lowest low -> flat). Fixed N, no optimization, no improvement claim.",
+  "experiment_type": "baseline",
+  "strategy_version": null,
+  "code_commit": "bf77ad8cf7e23a9b5fa5eecf6ea4174af55165e7",
+  "dataset_version": "btc-eth-spot-binance@v1",
+  "dataset_content_hash": "178e7403a3d60e4a3888c6e56833e9bfcba3b41d20084b87d1b10ed1cfbb9b46",
+  "config_version": null,
+  "feature_version": null,
+  "model_version": null,
+  "prompt_version": null,
+  "parent_experiment_id": null,
+  "baseline_experiment_id": null,
+  "config": {
+    "symbol": "BTCUSDT",
+    "timeframe": "1h",
+    "start": "2017-08-18T00:00:00+00:00",
+    "end": "2026-08-30T00:00:00+00:00",
+    "lookback_hours": 24,
+    "params": {
+      "n": 24
+    },
+    "fill_model": {
+      "execution": "open of the candle following the signal candle",
+      "taker_fee": "0.001",
+      "half_spread": "0.0001",
+      "initial_capital": "10000",
+      "sizing": "all-in",
+      "equity_convention": {
+        "curve": "mark-to-market at each decision candle close",
+        "final_liquidation": "net return liquidates any open position at the last close, with costs"
+      }
+    }
+  },
+  "metrics": {
+    "net_return_pct": "46.88",
+    "max_drawdown_pct": "-76.81",
+    "trades": 1376,
+    "fees_paid": "24826.01",
+    "exposure_pct": "52.77",
+    "bars": 79034,
+    "final_equity": "14688.19"
+  },
+  "acceptance_criteria": "none \u2014 baseline, recorded as reference only",
+  "results": "see metrics and equity.csv",
+  "decision": "N/A (baseline; no conclusion is drawn, docs/21 \u00a722)",
+  "artifacts": [
+    "equity.csv"
+  ],
+  "notes": "T7bis: first real replay consumer; clock ended at 2026-08-30T00:00:00+00:00"
+}
