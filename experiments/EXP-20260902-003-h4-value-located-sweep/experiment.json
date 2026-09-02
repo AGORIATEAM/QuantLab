@@ -1,13 +1,13 @@
 {
   "experiment_id": "EXP-20260902-003",
   "title": "H4: failed sweep at prior-day value edges",
-  "status": "PLANNED",
+  "status": "COMPLETED",
   "owner": "quantlab",
   "created_at": "2026-09-02T07:40:00+00:00",
   "hypothesis": "Parmi les balayages ratés 15m contre-contexte dimensionnés au bruit (règles Hyp-3 inchangées), le sous-ensemble localisé aux BORDS DE VALEUR de la veille — bas balayé sous le VAL de J-1 en contexte haussier (long), haut balayé sur/au-dessus du VAH de J-1 en contexte baissier (short) — a une espérance nette positive après coûts : la localisation au bord de la valeur acceptée concentre le signal de timing (brut +0,013/+0,014 R médian en H3, dix fois sous le coût) au point où il devient monétisable.",
   "experiment_type": "strategy-hypothesis",
   "strategy_version": null,
-  "code_commit": null,
+  "code_commit": "7d3f349",
   "dataset_version": "btc-eth-spot-binance@v1",
   "dataset_content_hash": "178e7403a3d60e4a3888c6e56833e9bfcba3b41d20084b87d1b10ed1cfbb9b46",
   "config_version": null,
@@ -108,10 +108,68 @@
     "comparison_vs_EXP-20260902-002 (mêmes trades, lecture localisée)"
   ],
   "acceptance_criteria": "GELÉ À LA RÉDACTION — critères identiques à Hyp-1/2/3, appliqués au SOUS-ENSEMBLE PRIMAIRE sur les configurations ÉVALUABLES (>= 100 trades IS primaires) : H4 est REJETÉE si, en out-of-sample, l'espérance nette par trade primaire est <= 0 OU le PF_R primaire < 1.15 sur l'UN des deux instruments, OU si les résultats primaires s'inversent dans un voisinage intra-famille de détecteur. Par l'addendum B (ADR-0002), un IS uniformément non viable sur les configurations évaluables clôt REJECTED sur l'IS seul, sans consommer l'OOS. Si AUCUNE configuration n'est évaluable (toutes < 100 trades primaires IS), l'hypothèse est close NON TESTABLE — ni acceptée ni rejetée. La prédiction secondaire (brut primaire > brut contrôle) est rapportée mais ne participe pas à la décision.",
-  "results": null,
-  "decision": null,
+  "results": {
+    "in_sample": {
+      "window": "[2017-08-17, 2023-01-01)",
+      "evaluable": "96/96 configurations sur CHAQUE instrument (garde-fou 100 trades primaires : jamais mordu ; trades primaires medians 317 BTC / 299 ETH) — hypothese pleinement TESTABLE, decision NON TESTABLE ecartee",
+      "BTCUSDT": {
+        "primary": {
+          "positive_expectancy": 0,
+          "expectancy_r_median": -0.2102,
+          "range": [
+            -0.2702,
+            -0.1256
+          ],
+          "gross_r_median": -0.0486,
+          "pf_r_median": 0.6285,
+          "win_rate_median": 32.9,
+          "trades_median": 317
+        },
+        "control_dans_valeur": {
+          "gross_r_median": 0.0168,
+          "expectancy_r_median": -0.1569
+        },
+        "swallowing": {
+          "primary_ignored_median": 328,
+          "share_median_pct": 51.5
+        },
+        "csv_sha256": "76f87242a08ed5266c71d15e93c6ab9a7874c0b66ff971406393178ef8e10995"
+      },
+      "ETHUSDT": {
+        "primary": {
+          "positive_expectancy": 8,
+          "expectancy_r_median": -0.1232,
+          "range": [
+            -0.197,
+            0.0423
+          ],
+          "gross_r_median": 0.006,
+          "pf_r_median": 0.7751,
+          "win_rate_median": 36.4,
+          "trades_median": 299,
+          "note_positives": "les 8 configs >0 forment un cluster coherent (toutes 1d_n3 fractal, 7/8 buf=0.1) mais PF_R max 1.0815 < 1.15 et mono-instrument"
+        },
+        "control_dans_valeur": {
+          "gross_r_median": 0.0331,
+          "expectancy_r_median": -0.0907
+        },
+        "swallowing": {
+          "primary_ignored_median": 270,
+          "share_median_pct": 46.4
+        },
+        "csv_sha256": "c6f1c7e471cad837a61a16569fb4481f1a2943413262c82f4c7166b5e73b5b72"
+      },
+      "secondary_prediction": "NON TENUE sur les DEUX instruments : brut primaire median -0.0486 (BTC) et +0.0060 (ETH) vs brut dans_valeur +0.0168 et +0.0331 — la localisation aux bords de valeur DEGRADE le signal au lieu de le concentrer.",
+      "diagnostic": "(1) Refutation forte : non seulement le net primaire echoue partout ou presque (0/96 BTC, 8/96 ETH sous le seuil PF), mais la PREDICTION SECONDAIRE est inversee — le sous-ensemble primaire fait PIRE que le controle dans_valeur en brut, sur les deux instruments. (2) Asymetrie directionnelle : sur ETH le cote short (sur_vah, brut +0.079) est le meilleur bucket, mais le cote long (sous_val, brut -0.037) l'annule ; sur BTC bull x sous_val est la PIRE cellule (brut -0.077). (3) poc_zone : meilleur brut BTC (+0.091, 66 trades) mais pire ETH (-0.208, 52 trades) — instable, echantillon mince, bucket diagnostique confirme comme tel. (4) hors_plage (~32% des trades) : brut legerement positif des deux cotes mais rien de monetisable. (5) Avalement primaire ~50% (51.5% BTC / 46.4% ETH) : la donnee pour une Hyp-5 'primaire seul' existe, mais avec un brut primaire inferieur au controle, ces chiffres ne fournissent AUCUNE base economique a cette variante. (6) Population globale strictement identique a EXP-20260902-002 (invariant verifie a l'equivalence)."
+    },
+    "out_of_sample": "NON EXECUTE — deliberement preserve (ADR-0002 addendum B) : aucune configuration ne franchit les criteres necessaires sur les deux instruments.",
+    "equivalence": "90 j [2021-01-01, 2021-04-01), LES DEUX instruments (ordre utilisateur) : BTC 6905 trades / ETH 5780, parite trade par trade ET parite des etiquettes exacte (1012 / 1160 trades primaires), compteurs par (side, bucket) exacts, primary_ignored exact, invariant population-H3 tenu (metriques globales H4 == FastH3), determinisme aux hashes 0a04ea2a485a7527 (BTC) / 32c16ab1a4851ac8 (ETH). Mini-equivalence synthetique en CI (test_h4fast.py)."
+  },
+  "decision": "REJECTED sur l'IS seul (2026-09-02), OOS non consomme — application des criteres geles : sur BTCUSDT, 0/96 configurations evaluables a esperance nette primaire > 0 ; sur ETHUSDT, 8/96 positives mais toutes sous le seuil PF_R 1.15 et sans contrepartie BTC — aucune configuration ne franchit les criteres necessaires sur les deux instruments (addendum B). La refutation depasse le critere : la prediction secondaire pre-enregistree est INVERSEE sur les deux instruments (brut primaire < brut controle dans_valeur) — la confluence structurelle testee (bord de valeur de la veille) n'ajoute pas d'information au timing du sweep, elle en retire. La piste 'localisation Volume Profile du niveau balaye' est close dans cette forme ; les chiffres d'avalement (~50%) sont consignes mais ne motivent pas de variante 'primaire seul'.",
   "artifacts": [
-    "descriptive_2024_localization.txt"
+    "descriptive_2024_localization.txt",
+    "insample_BTCUSDT_metrics.csv",
+    "insample_ETHUSDT_metrics.csv"
   ],
-  "notes": "Gelé PLANNED le 2026-09-02 (quatre précisions ratifiées : PF_R par sous-ensemble ; prédiction secondaire à grille constante par instrument ; garde-fou sur le compte primaire ; parité des étiquettes intégrée à l'équivalence — et ajout au rapport IS : part d'avalement du primaire). Table de calibrage : descriptive_2024_localization.txt (grille 32 lignes, 2024, couverture 366/366 jours frais, script commit 58054d0, moteur profil d6b5c86, fréquences primaires observées 0.05-0.21 sweep/j par config). Après gel utilisateur, séquence habituelle : (1) runner H4 = simulateurs H3 + étiquetage (référence Decimal + miroir fast ; mécanisme prévu : les niveaux du profil J-1 et le drapeau de fraîcheur sont extraits UNE fois côté Decimal pendant l'extraction, convertis en float pour les shards — l'équivalence doit prouver la PARITÉ DES ÉTIQUETTES trade par trade en plus des critères ADR-0003), équivalence 90 j Decimal sur LES DEUX instruments (ordre utilisateur : BTC et ETH) + déterminisme au hash + mini-équivalence synthétique en CI ; (2) IS 2 instruments, rapport diagnostique par bucket ; (3) ARRÊT — OOS uniquement sur ordre utilisateur explicite si l'IS le mérite (addendum B). Filiation : EXP-20260902-002 (REJECTED sur IS, brut médian positif — le fait diagnostique qui motive H4)."
+  "notes": "Gelé PLANNED le 2026-09-02 (quatre précisions ratifiées : PF_R par sous-ensemble ; prédiction secondaire à grille constante par instrument ; garde-fou sur le compte primaire ; parité des étiquettes intégrée à l'équivalence — et ajout au rapport IS : part d'avalement du primaire). Table de calibrage : descriptive_2024_localization.txt (grille 32 lignes, 2024, couverture 366/366 jours frais, script commit 58054d0, moteur profil d6b5c86, fréquences primaires observées 0.05-0.21 sweep/j par config). Après gel utilisateur, séquence habituelle : (1) runner H4 = simulateurs H3 + étiquetage (référence Decimal + miroir fast ; mécanisme prévu : les niveaux du profil J-1 et le drapeau de fraîcheur sont extraits UNE fois côté Decimal pendant l'extraction, convertis en float pour les shards — l'équivalence doit prouver la PARITÉ DES ÉTIQUETTES trade par trade en plus des critères ADR-0003), équivalence 90 j Decimal sur LES DEUX instruments (ordre utilisateur : BTC et ETH) + déterminisme au hash + mini-équivalence synthétique en CI ; (2) IS 2 instruments, rapport diagnostique par bucket ; (3) ARRÊT — OOS uniquement sur ordre utilisateur explicite si l'IS le mérite (addendum B). Filiation : EXP-20260902-002 (REJECTED sur IS, brut médian positif — le fait diagnostique qui motive H4). | CLOTURE 2026-09-02 : sequence executee integralement (equivalence bi-instrument verte -> IS 2 instruments -> rapport par bucket -> ARRET avant OOS). Compute IS : 1.2 min les deux instruments."
 }
