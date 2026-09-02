@@ -1,0 +1,89 @@
+{
+  "experiment_id": "EXP-20260902-002",
+  "title": "H3: failed 15m sweep, risk sized to noise",
+  "status": "DRAFT",
+  "owner": "quantlab",
+  "created_at": "2026-09-02T06:15:00+00:00",
+  "hypothesis": "Un balayage raté d'un swing 15m contre le sens du contexte lent, suivi d'une clôture de reprise, a une espérance nette positive après coûts lorsque le risque est dimensionné au bruit (stop k×ATR ancré sous la mèche).",
+  "experiment_type": "strategy-hypothesis",
+  "strategy_version": null,
+  "code_commit": null,
+  "dataset_version": "btc-eth-spot-binance@v1",
+  "dataset_content_hash": "178e7403a3d60e4a3888c6e56833e9bfcba3b41d20084b87d1b10ed1cfbb9b46",
+  "config_version": null,
+  "feature_version": null,
+  "model_version": null,
+  "prompt_version": null,
+  "parent_experiment_id": "EXP-20260902-001",
+  "baseline_experiment_id": "EXP-20260901-002",
+  "conceptual_tradeoff": "ASSUMÉ ET DOCUMENTÉ (décision utilisateur au gel de la définition du stop, 2026-09-02) : le stop est une invalidation STATISTIQUE (bruit, k×ATR_15m) ancrée sous l'invalidation STRUCTURELLE (l'extrémité de la mèche) ; avec k ∈ {3,4} le terme k×ATR domine presque toujours la mèche (~0,2 % médian vs ~1,0-1,6 %) — le sweep fournit le TIMING et la DIRECTION, pas la distance. Hyp-3 teste la valeur du timing dans une géométrie économique viable (table de calibrage du 2026-09-02 : k=4 → coût médian 0,14-0,17 R et q75 0,18-0,25 R sur les 16 configurations mesurées ; k=3 → cible tenue sur ETH, frôlée sur BTC). La définition (b) — swing opposé précédent — est écartée : dispersion (coût q75 jusqu'à 1,37 R) et couverture 60-70 % seulement.",
+  "config": {
+    "instruments": ["BTCUSDT", "ETHUSDT"],
+    "note_instruments": "ADR-0002 décision 5 : les deux instruments requis.",
+    "rules": {
+      "signal": "WICK_BREAK d'un swing 15m confirmé CONTRE le sens du contexte lent, clôture de reprise intrinsèque (mèche au-delà du niveau, close qui échoue la validation)",
+      "direction": "sens du contexte lent : BULLISH -> sweep d'un swing LOW -> long ; BEARISH -> sweep d'un swing HIGH -> short ; NEUTRAL/UNKNOWN -> pas de trade",
+      "entry": "à l'open de la bougie 15m suivant la bougie de sweep",
+      "stop": "max(extrémité de la mèche du sweep, k × ATR_15m au signal), ancré du côté opposé à la position ; k dans le voisinage",
+      "exit": "cible en R (voisinage) OU CHoCH 15m contre la position (signal au close, fill à l'open suivant)",
+      "sizing": "risque fixe 0.5% de l'equity par trade",
+      "fill_ambiguities": "hérités d'EXP-20260901-003 amendé / EXP-20260902-001 : stop-first même bougie, gap au-delà du stop rempli à l'open, une position max sans pyramidage, cap notionnel 1x equity (part cappée rapportée)",
+      "min_stop_filter": "SUPPRIMÉ du voisinage — le plancher k×ATR (k>=3) rend le filtre redondant par construction : la distance de stop est toujours >= 3×ATR_15m, très au-dessus des seuils min_stop_atr testés en H2 ({0.3, 0.5}×ATR). Documenté ici pour la traçabilité."
+    },
+    "timeframes": {
+      "decision": "15m (frontière basse du périmètre, ADR-0002 addendum C)",
+      "context_slow": "4h (n=5) OU 1d (n=3) — les deux points dans le voisinage",
+      "per_adr": "ADR-0002 décision 2 + addendum C"
+    },
+    "parameter_neighborhoods": {
+      "context": ["4h_n5", "1d_n3"],
+      "n_15m": [2, 3],
+      "detector": ["fractal", "atr_2"],
+      "breakout_buffer_atr": [0, 0.1],
+      "k_stop_atr": [3, 4],
+      "r_target": [1.5, 2, 3],
+      "grid_size": 96,
+      "note_grid": "2 contextes × 2 n_15m × 2 détecteurs (fractal, ATR mult 2 — grille détecteur réduite par le gel de calibrage, appliquée aux deux étages) × 2 buffers de validation (hérités : ils définissent le WICK_BREAK lui-même) × 2 k × 3 cibles R = 96 configurations exactes. k=4 est le point central du gel ; min_stop_atr supprimé (cf. rules.min_stop_filter)."
+    },
+    "windows": {
+      "in_sample": "[2017-08-17, 2023-01-01)",
+      "out_of_sample": "[2023-01-01, 2026-08-30)",
+      "per_adr": "ADR-0002 décision 5 — jamais inversé ; addendum B : OOS uniquement si l'IS le mérite"
+    },
+    "fill_model": {
+      "reference": "EXP-20260901-001/002 (ADR-0002 décision 4), identique à Hyp-1/Hyp-2",
+      "execution": "open of the candle following the signal candle",
+      "taker_fee": "0.001",
+      "half_spread": "0.0001",
+      "sizing_override": "fixed fractional risk 0.5% of equity, notional cap 1x equity",
+      "equity_convention": {
+        "curve": "mark-to-market at each decision candle close",
+        "final_liquidation": "net return liquidates any open position at the last close, with costs"
+      }
+    }
+  },
+  "metrics": [
+    "expectancy_r",
+    "profit_factor",
+    "win_rate_pct",
+    "max_drawdown_pct",
+    "trades",
+    "fees_paid",
+    "exposure_pct",
+    "sharpe_annualized",
+    "avg_cost_r",
+    "avg_stop_distance_pct",
+    "trades_per_day",
+    "capped_trades_share",
+    "share_stop_dominated_by_atr",
+    "pct_time_neutral_context",
+    "context_state_changes_per_week",
+    "comparison_vs_EXP-20260901-001_002_and_EXP-20260902-001"
+  ],
+  "note_metrics": "share_stop_dominated_by_atr (part des trades où k×ATR > mèche) ajoute la lecture directe du trade-off conceptuel assumé.",
+  "acceptance_criteria": "GELÉ À LA RÉDACTION (mêmes seuils qu'Hyp-1/2) : H3 est REJETÉE si, en out-of-sample, l'espérance nette par trade est <= 0 OU le profit factor < 1.15 sur l'UN des deux instruments, OU si les résultats s'inversent dans un voisinage intra-famille de détecteur (fractal entre eux ; ATR entre points voisins). Par la règle de l'addendum B (ADR-0002), un IS uniformément non viable clôt l'hypothèse REJECTED sur l'IS seul, sans consommer l'OOS.",
+  "results": null,
+  "decision": null,
+  "artifacts": [],
+  "notes": "STATUT DRAFT — NE PAS EXÉCUTER. Après gel utilisateur : séquence habituelle — (1) runner H3 Decimal de référence + miroir fast, équivalence complète (90 j trade par trade, déterminisme au hash, mini-équivalence synthétique en CI) ; (2) IS 2 instruments + rapport diagnostique (métriques amendées + fréquence effective vs les tables descriptives du 2026-09-02) ; (3) ARRÊT — OOS uniquement sur ordre utilisateur explicite si l'IS le mérite (addendum B). Sources de calibrage : tables commitées 31c0f39 (fréquences/distances mèche) et 4ebe802 (définitions de stop)."
+}
