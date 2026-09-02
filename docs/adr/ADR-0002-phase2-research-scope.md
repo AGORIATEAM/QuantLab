@@ -70,3 +70,32 @@ testée dans un cadre non négocié après coup.
 - **Timeframes de décision 1h/4h (swing multi-jours)** : écarté de
   l'horizon Phase 2 — l'horizon intraday est la décision 1 ; le 4h
   reste disponible comme contexte en extension.
+
+---
+
+## Addendum B — Préservation de l'out-of-sample
+
+**Statut : ACCEPTED — 2026-09-02**
+
+L'out-of-sample est une **ressource épuisable**. Il n'est exécuté que si
+l'in-sample franchit les critères nécessaires ; un IS uniformément non
+viable clôt l'hypothèse **REJECTED sur l'IS seul**. Précédent :
+EXP-20260902-001 (0/288 configurations à espérance positive sur les deux
+instruments, sans inversion de voisinage — OOS non consommé).
+
+---
+
+## Addendum C — Révision de périmètre sur preuves : plancher 15m
+
+**Statut : ACCEPTED — 2026-09-02**
+
+Les **entrées sur structure 5m sont retirées du périmètre de recherche en
+frais taker** : EXP-20260901-003 et EXP-20260902-001 établissent que les
+stops naturels du 5m (0,27-0,33 % médian) rendent le coût par trade
+(1,3-1,6 R au modèle de fill de référence, plancher 0,22 %/aller-retour)
+structurellement supérieur à tout edge plausible. **La frontière basse des
+entrées devient le 15m.** Le 5m et le 1m restent disponibles pour la
+construction (indicateurs, simulation fine), jamais pour la décision.
+
+**Conditions de révision :** modèle de fill maker (ADR dédié) ou données
+tick.
