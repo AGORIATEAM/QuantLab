@@ -1,7 +1,7 @@
 {
   "experiment_id": "EXP-20260902-001",
   "title": "H2: failed sweep against the slow context, recovery close",
-  "status": "DRAFT",
+  "status": "PLANNED",
   "owner": "quantlab",
   "created_at": "2026-09-02T05:10:00+00:00",
   "hypothesis": "Un balayage raté d'un swing 5m contre le sens du contexte lent, suivi d'une clôture de reprise, a une espérance nette positive après coûts — les cassures étant plus souvent des prises de liquidité que des départs.",
@@ -17,7 +17,10 @@
   "parent_experiment_id": "EXP-20260901-003",
   "baseline_experiment_id": "EXP-20260901-002",
   "config": {
-    "instruments": ["BTCUSDT", "ETHUSDT"],
+    "instruments": [
+      "BTCUSDT",
+      "ETHUSDT"
+    ],
     "note_instruments": "ADR-0002 décision 5 : les deux instruments requis.",
     "rules": {
       "signal": "WICK_BREAK d'un swing 5m confirmé CONTRE le sens du contexte lent, avec clôture de reprise au-delà du niveau balayé (définition mécanique du moteur : mèche au-delà du niveau, close qui échoue la validation — la clôture de reprise est intrinsèque au WICK_BREAK)",
@@ -35,14 +38,36 @@
       "per_adr": "ADR-0002 décision 2 (4h = contexte en extension)"
     },
     "parameter_neighborhoods": {
-      "context": ["1h_n8", "4h_n5"],
-      "n_5m": [2, 3],
-      "detector": ["fractal", "atr"],
-      "atr_multiplier_if_atr": [1.5, 2, 3],
-      "breakout_buffer_atr": [0, 0.1],
-      "min_stop_atr": [0, 0.3, 0.5],
-      "r_target": [1.5, 2, 3],
-      "note": "à geler définitivement avec les critères de réfutation après lecture de la table de fréquences (étape 1)"
+      "context": [
+        "1h_n8",
+        "4h_n5"
+      ],
+      "n_5m": [
+        2,
+        3
+      ],
+      "detector": [
+        "fractal",
+        "atr_1.5",
+        "atr_2",
+        "atr_3"
+      ],
+      "breakout_buffer_atr": [
+        0,
+        0.1
+      ],
+      "min_stop_atr": [
+        0,
+        0.3,
+        0.5
+      ],
+      "r_target": [
+        1.5,
+        2,
+        3
+      ],
+      "grid_size": 288,
+      "note_grid": "grille détecteur complète gelée par l'utilisateur (fractal + ATR aux trois multiplicateurs, appliqué aux deux étages 5m et contexte) ; 288 configurations exactes — le ~648 évoqué à la revue était une erreur d'arithmétique, corrigée au gel."
     },
     "windows": {
       "in_sample": "[2017-08-17, 2023-01-01)",
@@ -79,9 +104,9 @@
     "context_state_changes_per_week",
     "comparison_vs_EXP-20260901-001_002_and_003"
   ],
-  "acceptance_criteria": "PROPOSÉ (à geler après l'étape 1, mêmes seuils que H1) : H2 est REJETÉE si, en out-of-sample, l'espérance nette par trade est <= 0 OU le profit factor < 1.15 sur l'UN des deux instruments, OU si les résultats s'inversent dans un voisinage de paramètres déclaré.",
+  "acceptance_criteria": "GELÉ (2026-09-02) : H2 est REJETÉE si, en out-of-sample, l'espérance nette par trade est <= 0 OU le profit factor < 1.15 sur l'UN des deux instruments, OU si les résultats s'inversent dans un voisinage de paramètres — l'inversion s'évaluant AU SEIN de chaque famille de détecteur (fractal entre eux ; ATR entre multiplicateurs voisins), jamais entre familles.",
   "results": null,
   "decision": null,
   "artifacts": [],
-  "notes": "STATUT DRAFT — NE PAS EXÉCUTER. Gel des voisinages et des critères de réfutation après lecture de la table de fréquences de sweeps 2024 (étape 1), puis ordre d'exécution explicite de l'utilisateur. Le stop à l'extrémité de la mèche est structurellement plus serré que le stop de swing d'Hyp-1 : le voisinage min_stop_atr {0, 0.3, 0.5} devrait mordre cette fois (diagnostic H1 : jamais déclenché avec les stops de swing)."
+  "notes": "Gelé le 2026-09-02 : grille détecteur complète (288 configs), les deux contextes au voisinage, critères de réfutation identiques à H1 avec inversion intra-famille, règles de fill/ambiguïtés/taille/cap/fenêtres/métriques héritées de EXP-20260901-003 amendé telles quelles. ORDRE D'EXÉCUTION STRICT : (1) runner Decimal de référence + miroir fast + équivalence complète (90 j trade par trade, déterminisme au hash, mini-équivalence synthétique en CI) ; (2) IS 2 instruments + rapport diagnostique (métriques amendées + fréquence effective des entrées vs la table descriptive) ; (3) OOS UNIQUEMENT sur feu vert utilisateur après lecture du rapport IS."
 }
