@@ -99,6 +99,7 @@ class H1Metrics:
     fees_paid: Decimal = ZERO
     capped: int = 0
     skipped_min_stop: int = 0
+    stop_atr_dominated: int = 0  # H3: trades whose stop distance came from k x ATR, not the wick
     ignored_in_position: int = 0
     bars: int = 0
     bars_in_position: int = 0

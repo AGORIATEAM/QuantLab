@@ -187,6 +187,7 @@ class FastMetrics:
     fees_paid: float = 0.0
     capped: int = 0
     skipped_min_stop: int = 0
+    stop_atr_dominated: int = 0  # H3: stop distance came from k x ATR, not the wick
     ignored_in_position: int = 0
     bars: int = 0
     bars_in_position: int = 0
@@ -217,6 +218,7 @@ class FastSimulator:
     HALF_SPREAD = 0.0001
     CAPITAL = 10_000.0
     RISK = 0.005
+    BAR_SECONDS = 300  # decision candle duration (day rule); H3 overrides to 900
 
     def __init__(
         self,
@@ -377,7 +379,7 @@ class FastSimulator:
             dd = (equity / self._peak - 1) * 100
             if dd < self._max_dd:
                 self._max_dd = dd
-        day = (ots + 300) // 86400  # close_time = open + 300s, same day rule as slow
+        day = (ots + self.BAR_SECONDS) // 86400  # close_time day, same rule as slow
         if self._last_day is None:
             self._last_day = day
         elif day != self._last_day:
