@@ -1,0 +1,116 @@
+{
+  "experiment_id": "EXP-20260902-003",
+  "title": "H4: failed sweep at prior-day value edges",
+  "status": "DRAFT",
+  "owner": "quantlab",
+  "created_at": "2026-09-02T07:40:00+00:00",
+  "hypothesis": "Parmi les balayages ratés 15m contre-contexte dimensionnés au bruit (règles Hyp-3 inchangées), le sous-ensemble localisé aux BORDS DE VALEUR de la veille — bas balayé sous le VAL de J-1 en contexte haussier (long), haut balayé sur/au-dessus du VAH de J-1 en contexte baissier (short) — a une espérance nette positive après coûts : la localisation au bord de la valeur acceptée concentre le signal de timing (brut +0,013/+0,014 R médian en H3, dix fois sous le coût) au point où il devient monétisable.",
+  "experiment_type": "strategy-hypothesis",
+  "strategy_version": null,
+  "code_commit": null,
+  "dataset_version": "btc-eth-spot-binance@v1",
+  "dataset_content_hash": "178e7403a3d60e4a3888c6e56833e9bfcba3b41d20084b87d1b10ed1cfbb9b46",
+  "config_version": null,
+  "feature_version": null,
+  "model_version": null,
+  "prompt_version": null,
+  "parent_experiment_id": "EXP-20260902-002",
+  "baseline_experiment_id": "EXP-20260901-002",
+  "conceptual_design": "DESIGN PAR ÉTIQUETAGE (calibrage utilisateur du 2026-09-02) : le simulateur prend TOUS les trades de la grille H3 (mêmes signaux, mêmes fills, même gestion — la population de trades est identique à EXP-20260902-002) ; chaque trade est ÉTIQUETÉ à la bougie de signal par la localisation du niveau balayé (BreakEvent.level, le swing — pas l'extrémité de mèche) contre le profil de volume du jour UTC J-1. Les critères de réfutation s'évaluent sur le SOUS-ENSEMBLE PRIMAIRE ; les autres buckets sont diagnostiques, dans_valeur servant de contrôle. Un seul run produit l'hypothèse et ses contrôles.",
+  "config": {
+    "instruments": [
+      "BTCUSDT",
+      "ETHUSDT"
+    ],
+    "note_instruments": "ADR-0002 décision 5 : les deux instruments requis.",
+    "inherited_rules": "INTÉGRALEMENT héritées d'EXP-20260902-002 (gel du 2026-09-02) : signal WICK_BREAK 15m contre-contexte, entrée à l'open suivant, stop distance = max(extrémité de mèche, k × ATR_15m au signal) ancré côté opposé, sortie cible R ou CHoCH 15m, risque 0.5% / cap 1x equity, ambiguïtés de fill pessimistes, fill model EXP-20260901-001/002.",
+    "labeling": {
+      "classifier": "profil de volume jour UTC J-1 — VolumeProfileEngine v0.1.0, config e1e53c71a52f (100 bins sur [low, high] du jour, VA 70% par expansion gloutonne un bin, égalité POC -> bin le plus bas, égalité VA -> côté bas, distribution uniforme par chevauchement, CANDLE_ESTIMATED), INCHANGÉ depuis la table descriptive commitée (script 58054d0, moteur d6b5c86)",
+      "level_classified": "BreakEvent.level (le swing balayé)",
+      "partition_priority": [
+        "no_profile (profil absent ou day != jour_signal - 1)",
+        "hors_plage (niveau au-delà de [day_low, day_high] de J-1)",
+        "poc_zone (|niveau - POC| <= 0.25 x ATR_15m au signal — même source ATR que le stop)",
+        "sous_val (niveau <= VAL)",
+        "sur_vah (niveau >= VAH)",
+        "dans_valeur (reste)"
+      ],
+      "label_config_independence": "l'étiquette ne dépend que de (bougie, direction, profil J-1, ATR_15m) — l'ATR période 14 est identique pour toutes les configurations ; les trades diffèrent par config, les étiquettes s'attachent au trade."
+    },
+    "primary_subset": {
+      "definition": "trades LONG étiquetés sous_val (bas balayé sous le VAL de J-1, contexte haussier) UNION trades SHORT étiquetés sur_vah (haut balayé sur/au-dessus du VAH de J-1, contexte baissier)",
+      "excluded_from_primary": "poc_zone (trop mince : 0.5-6% des sweeps 2024) et hors_plage (pas d'information de volume — la thèse ne s'applique pas) restent des buckets DIAGNOSTIQUES",
+      "control": "dans_valeur (le sweep 'ordinaire', 28-46% des sweeps 2024)"
+    },
+    "evaluation": {
+      "criteria_scope": "les critères de réfutation gelés s'évaluent sur les métriques du sous-ensemble primaire, par configuration",
+      "pf_adaptation": "au niveau d'un bucket, le profit factor est calculé en R (somme des R positifs / |somme des R négatifs|) : un PF en devise par bucket serait entaché par la composition de l'equity à travers les étiquettes. Adaptation documentée ici ; le seuil gelé 1.15 s'applique à ce PF_R.",
+      "sample_guardrail": "GELÉ : une configuration avec moins de 100 trades IS dans le sous-ensemble primaire est RAPPORTÉE mais EXCLUE de l'évaluation des critères ; si TOUTES les configurations du voisinage sont sous 100, l'hypothèse est déclarée NON TESTABLE (décision terminale distincte de REJECTED) plutôt que jugée sur du bruit.",
+      "secondary_prediction": "PRÉ-ENREGISTRÉE, INFORMATIVE (pas un critère) : médiane sur les configurations évaluables de l'espérance BRUTE par trade du sous-ensemble primaire > médiane homologue du contrôle dans_valeur, sur CHACUN des deux instruments."
+    },
+    "timeframes": {
+      "decision": "15m",
+      "context_slow": "4h (n=5) OU 1d (n=3)",
+      "per_adr": "ADR-0002 décision 2 + addendum C — hérité d'EXP-20260902-002"
+    },
+    "parameter_neighborhoods": {
+      "context": [
+        "4h_n5",
+        "1d_n3"
+      ],
+      "n_15m": [
+        2,
+        3
+      ],
+      "detector": [
+        "fractal",
+        "atr_2"
+      ],
+      "breakout_buffer_atr": [
+        0,
+        0.1
+      ],
+      "k_stop_atr": [
+        3,
+        4
+      ],
+      "r_target": [
+        1.5,
+        2,
+        3
+      ],
+      "grid_size": 96,
+      "note_grid": "grille EXP-20260902-002 inchangée (96 configurations exactes) ; le classificateur n'ajoute AUCUN paramètre optimisé (config e1e53c71 figée avant lecture de toute rentabilité)."
+    },
+    "windows": {
+      "in_sample": "[2017-08-17, 2023-01-01)",
+      "out_of_sample": "[2023-01-01, 2026-08-30)",
+      "per_adr": "ADR-0002 décision 5 — jamais inversé ; addendum B : OOS uniquement si l'IS le mérite"
+    },
+    "fill_model": {
+      "reference": "EXP-20260901-001/002 (ADR-0002 décision 4), identique à Hyp-1/2/3",
+      "execution": "open of the candle following the signal candle",
+      "taker_fee": "0.001",
+      "half_spread": "0.0001",
+      "sizing_override": "fixed fractional risk 0.5% of equity, notional cap 1x equity",
+      "equity_convention": {
+        "curve": "mark-to-market at each decision candle close",
+        "final_liquidation": "net return liquidates any open position at the last close, with costs"
+      }
+    }
+  },
+  "metrics": [
+    "global: toutes les métriques EXP-20260902-002 (population identique de trades)",
+    "par bucket: trades, share_pct, expectancy_r, gross_expectancy_r, pf_r, win_rate_pct, avg_cost_r, avg_stop_distance_pct, share_stop_dominated_by_atr",
+    "primaire: primary_trades, primary_expectancy_r, primary_gross_expectancy_r, primary_pf_r, primary_win_rate_pct, evaluable (>= 100 trades IS primaires)",
+    "prédiction secondaire: gross_primary_median vs gross_dans_valeur_median par instrument",
+    "comparison_vs_EXP-20260902-002 (mêmes trades, lecture localisée)"
+  ],
+  "acceptance_criteria": "GELÉ À LA RÉDACTION — critères identiques à Hyp-1/2/3, appliqués au SOUS-ENSEMBLE PRIMAIRE sur les configurations ÉVALUABLES (>= 100 trades IS primaires) : H4 est REJETÉE si, en out-of-sample, l'espérance nette par trade primaire est <= 0 OU le PF_R primaire < 1.15 sur l'UN des deux instruments, OU si les résultats primaires s'inversent dans un voisinage intra-famille de détecteur. Par l'addendum B (ADR-0002), un IS uniformément non viable sur les configurations évaluables clôt REJECTED sur l'IS seul, sans consommer l'OOS. Si AUCUNE configuration n'est évaluable (toutes < 100 trades primaires IS), l'hypothèse est close NON TESTABLE — ni acceptée ni rejetée. La prédiction secondaire (brut primaire > brut contrôle) est rapportée mais ne participe pas à la décision.",
+  "results": null,
+  "decision": null,
+  "artifacts": [
+    "descriptive_2024_localization.txt"
+  ],
+  "notes": "STATUT DRAFT — NE PAS EXÉCUTER. Table de calibrage : descriptive_2024_localization.txt (grille 32 lignes, 2024, couverture 366/366 jours frais, script commit 58054d0, moteur profil d6b5c86, fréquences primaires observées 0.05-0.21 sweep/j par config). Après gel utilisateur, séquence habituelle : (1) runner H4 = simulateurs H3 + étiquetage (référence Decimal + miroir fast ; mécanisme prévu : les niveaux du profil J-1 et le drapeau de fraîcheur sont extraits UNE fois côté Decimal pendant l'extraction, convertis en float pour les shards — l'équivalence doit prouver la PARITÉ DES ÉTIQUETTES trade par trade en plus des critères ADR-0003), équivalence 90 j Decimal sur LES DEUX instruments (ordre utilisateur : BTC et ETH) + déterminisme au hash + mini-équivalence synthétique en CI ; (2) IS 2 instruments, rapport diagnostique par bucket ; (3) ARRÊT — OOS uniquement sur ordre utilisateur explicite si l'IS le mérite (addendum B). Filiation : EXP-20260902-002 (REJECTED sur IS, brut médian positif — le fait diagnostique qui motive H4)."
+}

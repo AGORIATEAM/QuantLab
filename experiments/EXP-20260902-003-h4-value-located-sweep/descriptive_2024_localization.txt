@@ -1,0 +1,47 @@
+== 2024 counter-context sweeps on 15m structure (descriptive; ATR mult=2; stop = wick extreme -> recovery close) ==
+profil: jour UTC J-1, engine v0.1.0 config e1e53c71a52f (100 bins, VA 70%); niveau classe: swing balaye; poc_zone = +-0.25 x ATR au signal
+symbol   context   detector    n dir   swp/j     no_profile     hors_plage       poc_zone       sous_val        sur_vah    dans_valeur
+{"dataset": "btc-eth-spot-binance@v1", "emitted": 49572, "warmup": 12240, "stream_seconds": 54.883, "event": "replay_completed", "level": "info", "timestamp": "2026-09-02T07:07:04.368562Z"}
+BTCUSDT  4h n=5    atr         2 bull   0.71/j    0.0%  0.00/j   25.3%  0.18/j    3.1%  0.02/j   19.2%  0.14/j   11.9%  0.08/j   40.6%  0.29/j
+BTCUSDT  4h n=5    atr         2 bear   0.65/j    0.0%  0.00/j   24.1%  0.16/j    1.7%  0.01/j   11.0%  0.07/j   24.5%  0.16/j   38.8%  0.25/j
+BTCUSDT  4h n=5    atr         3 bull   0.58/j    0.0%  0.00/j   26.1%  0.15/j    2.4%  0.01/j   19.4%  0.11/j   11.8%  0.07/j   40.3%  0.23/j
+BTCUSDT  4h n=5    atr         3 bear   0.54/j    0.0%  0.00/j   24.2%  0.13/j    0.5%  0.00/j   11.1%  0.06/j   26.8%  0.14/j   37.4%  0.20/j
+BTCUSDT  4h n=5    fractal     2 bull   1.00/j    0.0%  0.00/j   27.3%  0.27/j    4.1%  0.04/j   14.5%  0.14/j   12.8%  0.13/j   41.3%  0.41/j
+BTCUSDT  4h n=5    fractal     2 bear   0.82/j    0.0%  0.00/j   26.3%  0.22/j    1.0%  0.01/j   12.3%  0.10/j   21.3%  0.17/j   39.0%  0.32/j
+BTCUSDT  4h n=5    fractal     3 bull   0.77/j    0.0%  0.00/j   27.5%  0.21/j    4.6%  0.04/j   18.2%  0.14/j   11.4%  0.09/j   38.2%  0.29/j
+BTCUSDT  4h n=5    fractal     3 bear   0.61/j    0.0%  0.00/j   27.0%  0.16/j    1.4%  0.01/j   11.3%  0.07/j   23.0%  0.14/j   37.4%  0.23/j
+  couverture BTCUSDT 4h n=5: 366/366 jours avec profil J-1 frais; candle_count min 96 med 96 (attendu 96)
+{"dataset": "btc-eth-spot-binance@v1", "emitted": 47142, "warmup": 11640, "stream_seconds": 59.316, "event": "replay_completed", "level": "info", "timestamp": "2026-09-02T07:08:06.971949Z"}
+BTCUSDT  1d n=3    atr         2 bull   0.69/j    0.0%  0.00/j   30.6%  0.21/j    4.8%  0.03/j   17.1%  0.12/j    9.9%  0.07/j   37.7%  0.26/j
+BTCUSDT  1d n=3    atr         2 bear   0.66/j    0.0%  0.00/j   32.5%  0.22/j    3.3%  0.02/j    9.9%  0.07/j   20.2%  0.13/j   34.2%  0.23/j
+BTCUSDT  1d n=3    atr         3 bull   0.52/j    0.0%  0.00/j   29.1%  0.15/j    3.2%  0.02/j   19.6%  0.10/j    8.5%  0.04/j   39.7%  0.20/j
+BTCUSDT  1d n=3    atr         3 bear   0.54/j    0.0%  0.00/j   28.9%  0.16/j    3.6%  0.02/j   10.2%  0.05/j   21.8%  0.12/j   35.5%  0.19/j
+BTCUSDT  1d n=3    fractal     2 bull   1.14/j    0.0%  0.00/j   27.8%  0.32/j    5.5%  0.06/j   16.1%  0.18/j   11.5%  0.13/j   39.1%  0.45/j
+BTCUSDT  1d n=3    fractal     2 bear   0.53/j    0.0%  0.00/j   32.3%  0.17/j    2.6%  0.01/j   11.8%  0.06/j   21.5%  0.11/j   31.8%  0.17/j
+BTCUSDT  1d n=3    fractal     3 bull   0.80/j    0.0%  0.00/j   27.1%  0.22/j    3.8%  0.03/j   18.8%  0.15/j   12.0%  0.10/j   38.4%  0.31/j
+BTCUSDT  1d n=3    fractal     3 bear   0.40/j    0.0%  0.00/j   31.8%  0.13/j    1.4%  0.01/j   12.8%  0.05/j   26.4%  0.11/j   27.7%  0.11/j
+  couverture BTCUSDT 1d n=3: 366/366 jours avec profil J-1 frais; candle_count min 96 med 96 (attendu 96)
+{"dataset": "btc-eth-spot-binance@v1", "emitted": 49572, "warmup": 12240, "stream_seconds": 48.168, "event": "replay_completed", "level": "info", "timestamp": "2026-09-02T07:08:58.689290Z"}
+ETHUSDT  4h n=5    atr         2 bull   0.78/j    0.0%  0.00/j   26.9%  0.21/j    4.2%  0.03/j   19.9%  0.16/j   13.3%  0.10/j   35.7%  0.28/j
+ETHUSDT  4h n=5    atr         2 bear   0.55/j    0.0%  0.00/j   29.9%  0.16/j    4.5%  0.02/j   12.9%  0.07/j   16.4%  0.09/j   36.3%  0.20/j
+ETHUSDT  4h n=5    atr         3 bull   0.61/j    0.0%  0.00/j   26.3%  0.16/j    4.9%  0.03/j   20.5%  0.13/j   12.1%  0.07/j   36.2%  0.22/j
+ETHUSDT  4h n=5    atr         3 bear   0.45/j    0.0%  0.00/j   27.3%  0.12/j    4.8%  0.02/j   13.3%  0.06/j   17.6%  0.08/j   37.0%  0.17/j
+ETHUSDT  4h n=5    fractal     2 bull   0.93/j    0.0%  0.00/j   23.6%  0.22/j    4.7%  0.04/j   22.4%  0.21/j   11.5%  0.11/j   37.8%  0.35/j
+ETHUSDT  4h n=5    fractal     2 bear   0.66/j    0.0%  0.00/j   29.9%  0.20/j    5.0%  0.03/j    9.1%  0.06/j   12.4%  0.08/j   43.6%  0.29/j
+ETHUSDT  4h n=5    fractal     3 bull   0.67/j    0.0%  0.00/j   23.0%  0.15/j    5.7%  0.04/j   22.5%  0.15/j   12.3%  0.08/j   36.5%  0.24/j
+ETHUSDT  4h n=5    fractal     3 bear   0.47/j    0.0%  0.00/j   27.5%  0.13/j    4.7%  0.02/j    9.9%  0.05/j   11.7%  0.05/j   46.2%  0.22/j
+  couverture ETHUSDT 4h n=5: 366/366 jours avec profil J-1 frais; candle_count min 96 med 96 (attendu 96)
+{"dataset": "btc-eth-spot-binance@v1", "emitted": 47142, "warmup": 11640, "stream_seconds": 47.34, "event": "replay_completed", "level": "info", "timestamp": "2026-09-02T07:09:49.077522Z"}
+ETHUSDT  1d n=3    atr         2 bull   0.70/j    0.0%  0.00/j   25.4%  0.18/j    2.0%  0.01/j   19.5%  0.14/j   13.7%  0.10/j   39.5%  0.28/j
+ETHUSDT  1d n=3    atr         2 bear   0.54/j    0.0%  0.00/j   26.0%  0.14/j    4.1%  0.02/j   12.8%  0.07/j   23.0%  0.12/j   34.2%  0.18/j
+ETHUSDT  1d n=3    atr         3 bull   0.54/j    0.0%  0.00/j   22.7%  0.12/j    2.5%  0.01/j   20.2%  0.11/j   14.6%  0.08/j   39.9%  0.22/j
+ETHUSDT  1d n=3    atr         3 bear   0.41/j    0.0%  0.00/j   24.0%  0.10/j    4.0%  0.02/j   13.3%  0.05/j   26.0%  0.11/j   32.7%  0.13/j
+ETHUSDT  1d n=3    fractal     2 bull   1.04/j    0.0%  0.00/j   25.9%  0.27/j    1.8%  0.02/j   19.8%  0.20/j   11.1%  0.11/j   41.4%  0.43/j
+ETHUSDT  1d n=3    fractal     2 bear   0.79/j    0.0%  0.00/j   28.6%  0.23/j    5.2%  0.04/j   13.1%  0.10/j   20.7%  0.16/j   32.4%  0.26/j
+ETHUSDT  1d n=3    fractal     3 bull   0.76/j    0.0%  0.00/j   25.3%  0.19/j    1.8%  0.01/j   19.1%  0.14/j   12.3%  0.09/j   41.5%  0.31/j
+ETHUSDT  1d n=3    fractal     3 bear   0.54/j    0.0%  0.00/j   26.9%  0.14/j    6.1%  0.03/j   12.2%  0.07/j   21.3%  0.11/j   33.5%  0.18/j
+  couverture ETHUSDT 1d n=3: 366/366 jours avec profil J-1 frais; candle_count min 96 med 96 (attendu 96)
+
+Counting unit: swept swings (one WICK_BREAK max per armed swing);
+distances measured at the recovery close, warm-up excluded from counting.
+buckets (priorite): no_profile (absent/perime), hors_plage (hors [low, high] de J-1), poc_zone, sous_val (<= VAL), sur_vah (>= VAH), dans_valeur; cellule = part% de la direction + sweeps/j resultants.
