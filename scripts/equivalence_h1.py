@@ -51,7 +51,7 @@ from quantlab.structure.engine import MarketStructureEngine
 from run_h1 import BUFFERS, DATASET, MIN_STOPS, MULTS, N_1H, N_5M, R_TARGETS
 from run_h1_fast import EXP_DIR, configs_list, run_symbol_fast
 
-GOLDEN = EXP_DIR / "insample_BTCUSDT_metrics.csv"
+GOLDEN = EXP_DIR / "insample_BTCUSDT_metrics.golden-decimal.csv"
 GOLDEN_SHA256 = "3de5d0b427ec2f403e29457bd6445d1c496c42a82b26a0ec6480f66af2ff12b5"
 WINDOW_90D = (datetime(2021, 1, 1, tzinfo=UTC), datetime(2021, 4, 1, tzinfo=UTC))
 
@@ -129,7 +129,13 @@ def slow_trade_logs_90d(url: str) -> dict[tuple, list]:
             continue
         if key_5m is None:
             key_5m = event.series
-            assert key_1h is not None
+            if key_1h is None:  # the 5m candle closes before any 1h close
+                key_1h = type(event.series)(
+                    venue=event.series.venue,
+                    venue_symbol=event.series.venue_symbol,
+                    timeframe=Timeframe.H1,
+                    source=event.series.source,
+                )
             for n5, n1, mult, buf, r, ms in product(
                 N_5M, N_1H, MULTS, BUFFERS, R_TARGETS, MIN_STOPS
             ):
