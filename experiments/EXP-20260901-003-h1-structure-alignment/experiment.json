@@ -1,13 +1,13 @@
 {
   "experiment_id": "EXP-20260901-003",
   "title": "H1: 5m structure break aligned with 1h structure",
-  "status": "PLANNED",
+  "status": "COMPLETED",
   "owner": "quantlab",
   "created_at": "2026-09-01T08:45:00+00:00",
   "hypothesis": "Une cassure de structure 5m dans le sens de la structure 1h a une espérance nette positive après coûts, supérieure aux baselines (EXP-20260901-001 buy-and-hold, EXP-20260901-002 breakout24).",
   "experiment_type": "strategy-hypothesis",
   "strategy_version": null,
-  "code_commit": null,
+  "code_commit": "d746c2020376273b20ae27e2915c134c093b869d",
   "dataset_version": "btc-eth-spot-binance@v1",
   "dataset_content_hash": "178e7403a3d60e4a3888c6e56833e9bfcba3b41d20084b87d1b10ed1cfbb9b46",
   "config_version": null,
@@ -106,10 +106,90 @@
     "h1_state_changes_per_week"
   ],
   "acceptance_criteria": "Réfutation (fixée au pré-enregistrement) : H1 est REJETÉE si, en out-of-sample, l'espérance nette par trade est <= 0 OU le profit factor < 1.15 sur l'UN des deux instruments, OU si les résultats s'inversent dans un voisinage de paramètres déclaré.",
-  "results": null,
-  "decision": null,
-  "artifacts": [],
-  "notes": "Pré-enregistré avant toute exécution (ADR-0002 décision 5, docs/21). L'exécution requiert : Market Structure Engine minimal (plan validé), puis validation utilisateur de ce pré-enregistrement. Ne pas exécuter avant.",
+  "results": {
+    "executed": "2026-09-02, ADR-0003 fast path (equivalence L1 byte-identical to the Decimal golden CSV, L2 21,692 trades identical at rel 1e-9, deterministic)",
+    "runtime": "in-sample 2 instruments 5.8 min, out-of-sample 5.3 min (ADR-0003 budget < 30 min)",
+    "summary": {
+      "insample_BTCUSDT": {
+        "configs": 216,
+        "configs_expectancy_positive": 0,
+        "expectancy_r_median": -0.3621,
+        "expectancy_r_range": [
+          -0.4603,
+          -0.1938
+        ],
+        "profit_factor_median": 0.507,
+        "profit_factor_max": 0.6755,
+        "trades_median": 2016,
+        "avg_cost_r_median": 0.2708,
+        "avg_stop_pct_median": 1.3843,
+        "pct_time_neutral_1h_median": 38.7,
+        "net_return_pct_median": -96.84
+      },
+      "insample_ETHUSDT": {
+        "configs": 216,
+        "configs_expectancy_positive": 0,
+        "expectancy_r_median": -0.2111,
+        "expectancy_r_range": [
+          -0.2982,
+          -0.1178
+        ],
+        "profit_factor_median": 0.6897,
+        "profit_factor_max": 0.7797,
+        "trades_median": 2012,
+        "avg_cost_r_median": 0.2108,
+        "avg_stop_pct_median": 1.678,
+        "pct_time_neutral_1h_median": 38.32,
+        "net_return_pct_median": -87.18
+      },
+      "oos_BTCUSDT": {
+        "configs": 216,
+        "configs_expectancy_positive": 0,
+        "expectancy_r_median": -0.5609,
+        "expectancy_r_range": [
+          -0.7262,
+          -0.3754
+        ],
+        "profit_factor_median": 0.4314,
+        "profit_factor_max": 0.4917,
+        "trades_median": 1468,
+        "avg_cost_r_median": 0.5081,
+        "avg_stop_pct_median": 0.711,
+        "pct_time_neutral_1h_median": 39.18,
+        "net_return_pct_median": -94.31
+      },
+      "oos_ETHUSDT": {
+        "configs": 216,
+        "configs_expectancy_positive": 0,
+        "expectancy_r_median": -0.3692,
+        "expectancy_r_range": [
+          -0.4593,
+          -0.2427
+        ],
+        "profit_factor_median": 0.5198,
+        "profit_factor_max": 0.621,
+        "trades_median": 1449,
+        "avg_cost_r_median": 0.3633,
+        "avg_stop_pct_median": 0.9908,
+        "pct_time_neutral_1h_median": 37.93,
+        "net_return_pct_median": -87.84
+      }
+    },
+    "refutation_evaluation": {
+      "oos_expectancy_positive_configs": "0/216 on BTCUSDT AND 0/216 on ETHUSDT (criterion: expectancy <= 0 on either instrument -> rejected; met by the ENTIRE declared neighborhood)",
+      "oos_profit_factor": "max 0.4917 (BTCUSDT) / 0.6210 (ETHUSDT), all < 1.15",
+      "neighborhood_inversion": "none - no configuration is positive anywhere"
+    }
+  },
+  "decision": "REJECTED — per the pre-registered refutation criteria, unchanged since amendment: out-of-sample net expectancy <= 0 and profit factor < 1.15 on BOTH instruments, across the entire declared parameter neighborhood.",
+  "artifacts": [
+    "insample_BTCUSDT_metrics.csv",
+    "insample_ETHUSDT_metrics.csv",
+    "oos_BTCUSDT_metrics.csv",
+    "oos_ETHUSDT_metrics.csv",
+    "insample_BTCUSDT_metrics.golden-decimal.csv"
+  ],
+  "notes": "Executed on the ADR-0003 fast path after both equivalence levels passed. Diagnostic reading (mechanical): the raw signal is negative before costs (median cost ~0.25-0.27 R/trade vs median expectancy -0.36 to -0.56 R); the min_stop_atr=0.5 neighborhood never triggered (swing stops always wider than 0.5xATR_5m); ~25% of trades size-capped at 1x equity. H1 fails on the signal, not on cost microstructure alone.",
   "amendments": [
     {
       "date": "2026-09-01",
