@@ -4,7 +4,8 @@ determinism of the fast path and an exact per-config comparison of the
 new stop_atr_dominated counter. The synthetic mini-equivalence lives in
 CI (tests/unit/test_h3fast.py). Exit 0 only when green.
 
-Usage: python scripts/equivalence_h3.py
+Usage: python scripts/equivalence_h3.py [SYMBOL]
+    SYMBOL defaults to BTCUSDT; ETHUSDT runs the ADR-0003 ETH complement.
 """
 
 from __future__ import annotations
@@ -55,7 +56,7 @@ def engine_for(det_is_atr: int, n: int, mult: float, buf: float) -> MarketStruct
     )
 
 
-def slow_results(url: str) -> dict[int, tuple[list, int]]:
+def slow_results(url: str, symbol: str) -> dict[int, tuple[list, int]]:
     """index -> (trade_log, stop_atr_dominated) from the Decimal reference."""
     start, end = WINDOW_90D
     datasets = PostgresDatasetRepository(url)
@@ -83,7 +84,7 @@ def slow_results(url: str) -> dict[int, tuple[list, int]]:
         PostgresAuditEventWriter(url),
         *DATASET,
         SimulatedClock(start),
-        symbols=["BTCUSDT"],
+        symbols=[symbol],
         timeframes=TIMEFRAMES,
         start=start,
         end=end,
@@ -134,7 +135,8 @@ def slow_results(url: str) -> dict[int, tuple[list, int]]:
     return {i: (sim.trade_log, sim.metrics.stop_atr_dominated) for i, (sim, _k15) in sims.items()}
 
 
-def main() -> int:
+def main(argv: list[str]) -> int:
+    symbol = argv[0] if argv else "BTCUSDT"
     url = os.environ.get("QUANTLAB_DATABASE_URL")
     if not url:
         print("QUANTLAB_DATABASE_URL is not set", file=sys.stderr)
@@ -142,13 +144,13 @@ def main() -> int:
     configure_logging(AppConfig.load().log_level)
     start, end = WINDOW_90D
 
-    print(f"H3 equivalence: window [{start.date()} → {end.date()}), Decimal reference…")
+    print(f"H3 equivalence {symbol}: window [{start.date()} → {end.date()}), Decimal reference…")
     t0 = time.monotonic()
-    slow = slow_results(url)
+    slow = slow_results(url, symbol)
     print(f"  slow pass done in {(time.monotonic() - t0) / 60:.1f} min")
 
     print("H3 equivalence: fast path, twice (determinism)…")
-    rows = extract_rows_multi(url, *DATASET, "BTCUSDT", start, end, TIMEFRAMES)
+    rows = extract_rows_multi(url, *DATASET, symbol, start, end, TIMEFRAMES)
     fast_a = run_shard_h3(rows, configs_list(), log_trades=True)
     fast_b = run_shard_h3(rows, configs_list(), log_trades=True)
     digest_a = hashlib.sha256(repr([(i, m, t) for i, m, _c, t in fast_a]).encode()).hexdigest()
@@ -177,7 +179,7 @@ def main() -> int:
             print(f"  {d}", file=sys.stderr)
         return 1
     print(
-        f"  H3 equivalence OK: {total} trades across 96 configurations "
+        f"  H3 equivalence OK ({symbol}): {total} trades across 96 configurations "
         f"({dominated_total} ATR-dominated stops, counters exact), "
         "timings/side exact, prices and R within rel 1e-9"
     )
@@ -185,4 +187,4 @@ def main() -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    raise SystemExit(main(sys.argv[1:]))

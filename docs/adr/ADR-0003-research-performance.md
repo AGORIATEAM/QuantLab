@@ -86,3 +86,21 @@ commit `4ac2e2f`). ETHUSDT n'a jamais tourné sur cette implémentation.
   sur le budget. À reconsidérer si le budget est dépassé.
 - **Réduire les voisinages** : écarté — le protocole (ADR-0002) prime sur
   la commodité d'exécution.
+
+## Addendum A (2026-09-02) — équivalence niveau 2 étendue aux deux instruments (grille H3)
+
+Sur ordre utilisateur, la preuve trade par trade (niveau 2) a été exécutée
+sur ETHUSDT en complément du passage BTCUSDT, même fenêtre 90 jours
+`[2021-01-01, 2021-04-01)`, grille H3 gelée (96 configurations,
+EXP-20260902-002), harnais `scripts/equivalence_h3.py <SYMBOL>` :
+
+- **BTCUSDT** : 6 905 trades, parité trade par trade (timings/side exacts,
+  prix et R à rel 1e-9), compteur `stop_atr_dominated` exact par
+  configuration (6 889/6 905), déterminisme au hash `f05dbfe850d951fa…`.
+- **ETHUSDT** : 5 780 trades, mêmes critères tous verts, 5 768/5 780
+  stops dominés par k×ATR, déterminisme au hash `aed5f39681bb082e…`.
+
+Le niveau 2 n'est donc plus limité à un seul instrument : les deux
+instruments du périmètre (ADR-0002 décision 5) sont couverts par la même
+preuve. Règle inchangée : tout écart trade par trade arrête la recherche
+jusqu'à diagnostic.
