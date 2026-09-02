@@ -18,6 +18,16 @@ violated it, a stop there would be tighter than the wick. Implicit cost
 in R = 0.22% round-trip floor / distance; cost quantiles map exactly from
 distance quantiles (monotone inverse).
 
+--profile-table (calibration step before Hyp-4, user-validated partition)
+localizes each sweep's SWEPT LEVEL (BreakEvent.level, the swing — not the
+wick extreme) against the PREVIOUS UTC DAY's volume profile (J-1, the
+only one causally available), split by direction (the confluence thesis
+is directional). Buckets, in priority order: no_profile (absent or
+stale), hors_plage (beyond J-1's traded range — price discovery, no
+volume information), poc_zone (|level - POC| <= 0.25 x ATR at signal,
+same ATR source as the H3 stop), sous_val (<= VAL), sur_vah (>= VAH),
+dans_valeur (the rest). Shares and resulting sweeps/day per bucket.
+
 Detectors apply to BOTH stages (decision series and its context); the ATR
 variant uses mult=2. Decimal reference engines (the fast path skips wick
 bookkeeping by design). Counting starts after the warm-up window.
@@ -33,7 +43,7 @@ from __future__ import annotations
 import argparse
 import os
 import sys
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from itertools import product
 from statistics import median, quantiles
@@ -44,6 +54,8 @@ from quantlab.core.logging import configure_logging
 from quantlab.data.datasets import SeriesResolver
 from quantlab.data.replay import replay_candles
 from quantlab.domain.models import Timeframe
+from quantlab.profile import ENGINE_VERSION as PROFILE_ENGINE_VERSION
+from quantlab.profile import ProfileConfig, VolumeProfile, VolumeProfileEngine
 from quantlab.storage.postgres.adapter import (
     PostgresAuditEventWriter,
     PostgresCandleSnapshotFactory,
@@ -79,6 +91,27 @@ def engine(detector: DetectorKind, n: int, mult: Decimal | None) -> MarketStruct
     )
 
 
+BUCKETS = ["no_profile", "hors_plage", "poc_zone", "sous_val", "sur_vah", "dans_valeur"]
+POC_ZONE_ATR = Decimal("0.25")
+
+
+def classify_level(
+    level: Decimal, atr: Decimal, profile: VolumeProfile | None, signal_day: date
+) -> str:
+    """User-validated partition, priority order (frozen 2026-09-02)."""
+    if profile is None or profile.day != signal_day - timedelta(days=1):
+        return "no_profile"
+    if level > profile.day_high or level < profile.day_low:
+        return "hors_plage"
+    if abs(level - profile.poc) <= POC_ZONE_ATR * atr:
+        return "poc_zone"
+    if level <= profile.val:
+        return "sous_val"
+    if level >= profile.vah:
+        return "sur_vah"
+    return "dans_valeur"
+
+
 def measure(
     url: str,
     symbol: str,
@@ -87,19 +120,23 @@ def measure(
     n_context: int,
     n_decisions: list[int],
     lookback_days: int,
-) -> dict[tuple, tuple[int, int, list[tuple[float, float, float | None]]]]:
+    coverage: dict[date, tuple[bool, int]] | None = None,
+) -> dict[tuple, tuple[int, int, list[tuple[float, float, float | None, bool, str]]]]:
     """(detector, n_decision) -> (bull, bear, events) where each event is
-    (wick_distance_%, atr_%_of_price, prev_opposite_swing_distance_%|None)."""
+    (wick_distance_%, atr_%_of_price, prev_opposite_swing_distance_%|None,
+    is_long, profile_bucket). `coverage`, when given, is filled with
+    day -> (fresh J-1 profile present, its candle_count)."""
     datasets = PostgresDatasetRepository(url)
     resolve = SeriesResolver(PostgresVenueRepository(url), PostgresInstrumentRepository(url))
     context_engines = {d: engine(d, n_context, mult) for d, mult in DETECTORS}
     decision_engines = {
         (d, n): engine(d, n, mult) for (d, mult), n in product(DETECTORS, n_decisions)
     }
-    counts: dict[tuple, tuple[list[int], list[tuple[float, float, float | None]]]] = {
+    counts: dict[tuple, tuple[list[int], list[tuple[float, float, float | None, bool, str]]]] = {
         key: ([0, 0], []) for key in decision_engines
     }
     context_key = None
+    profiles = VolumeProfileEngine(ProfileConfig())
 
     for event in replay_candles(
         PostgresCandleSnapshotFactory(url),
@@ -120,6 +157,12 @@ def measure(
             for ctx in context_engines.values():
                 ctx.on_event(event)
             continue
+        profiles.on_event(event)  # feed first: at J's first candle, J-1 turns FINAL
+        signal_day = event.candle.open_time.astimezone(UTC).date()
+        available = profiles.previous(event.series)
+        if coverage is not None and not event.is_warmup and signal_day not in coverage:
+            fresh = available is not None and available.day == signal_day - timedelta(days=1)
+            coverage[signal_day] = (fresh, available.candle_count if fresh and available else 0)
         close = event.candle.close
         for (d, n), eng in decision_engines.items():
             outs = eng.on_event(event)
@@ -156,7 +199,13 @@ def measure(
                     signed = (close - prev_price) if long_side else (prev_price - close)
                     if signed > 0:  # a stop on the wrong side of price is no stop
                         prev_pct = float(signed / close * 100)
-                events.append((wick_pct, atr_pct, prev_pct))
+                bucket = classify_level(
+                    out.brk.level,
+                    atr_value if atr_value is not None else Decimal(0),
+                    available,
+                    signal_day,
+                )
+                events.append((wick_pct, atr_pct, prev_pct, long_side, bucket))
     return {key: (c[0][0], c[0][1], c[1]) for key, c in counts.items()}
 
 
@@ -191,6 +240,27 @@ def render_stop_table(label: str, bull: int, bear: int, events: list) -> None:
         )
 
 
+def render_profile_table(label: str, events: list) -> None:
+    for direction, is_long in (("bull", True), ("bear", False)):
+        side = [e for e in events if e[3] is is_long]
+        total = len(side)
+        cells = []
+        for bucket in BUCKETS:
+            n = sum(1 for e in side if e[4] == bucket)
+            share = n / total * 100 if total else 0.0
+            cells.append(f"{share:5.1f}% {n / DAYS:5.2f}/j")
+        print(f"{label} {direction:<5}{total / DAYS:6.2f}/j  " + "  ".join(cells))
+
+
+def render_coverage(symbol: str, context: str, coverage: dict[date, tuple[bool, int]]) -> None:
+    fresh = [c for f, c in coverage.values() if f]
+    print(
+        f"  couverture {symbol} {context}: {len(fresh)}/{len(coverage)} jours avec profil J-1 "
+        f"frais; candle_count min {min(fresh) if fresh else 0} "
+        f"med {median(fresh) if fresh else 0:.0f} (attendu 96)"
+    )
+
+
 def parse_contexts(raw: str) -> list[tuple[Timeframe, int]]:
     out = []
     for part in raw.split(","):
@@ -208,6 +278,11 @@ def main(argv: list[str]) -> int:
     parser.add_argument(
         "--stop-table", action="store_true", help="stop-definition calibration table"
     )
+    parser.add_argument(
+        "--profile-table",
+        action="store_true",
+        help="swept-level localization vs previous-day volume profile (Hyp-4 step)",
+    )
     args = parser.parse_args(argv)
     url = os.environ.get("QUANTLAB_DATABASE_URL")
     if not url:
@@ -222,20 +297,42 @@ def main(argv: list[str]) -> int:
         f"== 2024 counter-context sweeps on {decision_tf.value} structure "
         f"(descriptive; ATR mult=2; stop = wick extreme -> recovery close) =="
     )
-    print(
-        f"{'symbol':<9}{'context':<10}{'detector':<10}{'n':>3}"
-        f"{'bull/d':>8}{'bear/d':>8}{'tot/d':>8}"
-        f"{'stop% med':>11}{'q25':>8}{'q75':>8}"
-    )
+    if args.profile_table:
+        print(
+            f"profil: jour UTC J-1, engine v{PROFILE_ENGINE_VERSION} "
+            f"config {ProfileConfig().config_version} (100 bins, VA 70%); "
+            f"niveau classe: swing balaye; poc_zone = +-0.25 x ATR au signal"
+        )
+        print(
+            f"{'symbol':<9}{'context':<10}{'detector':<10}{'n':>3} {'dir':<5}{'swp/j':>6}  "
+            + "  ".join(f"{b:>13}" for b in BUCKETS)
+        )
+    else:
+        print(
+            f"{'symbol':<9}{'context':<10}{'detector':<10}{'n':>3}"
+            f"{'bull/d':>8}{'bear/d':>8}{'tot/d':>8}"
+            f"{'stop% med':>11}{'q25':>8}{'q75':>8}"
+        )
     for symbol in ("BTCUSDT", "ETHUSDT"):
         for context_tf, n_ctx in contexts:
+            coverage: dict[date, tuple[bool, int]] = {}
             results = measure(
-                url, symbol, decision_tf, context_tf, n_ctx, n_decisions, args.lookback_days
+                url,
+                symbol,
+                decision_tf,
+                context_tf,
+                n_ctx,
+                n_decisions,
+                args.lookback_days,
+                coverage=coverage if args.profile_table else None,
             )
             for (d, n), (bull, bear, events) in sorted(
                 results.items(), key=lambda kv: (kv[0][0], kv[0][1])
             ):
                 label = f"{symbol:<9}{context_tf.value + f' n={n_ctx}':<10}{d.value:<10}{n:>3}"
+                if args.profile_table:
+                    render_profile_table(label, events)
+                    continue
                 if args.stop_table:
                     render_stop_table(label, bull, bear, events)
                     continue
@@ -247,8 +344,16 @@ def main(argv: list[str]) -> int:
                     stats = f"{'-':>11}{'-':>8}{'-':>8}"
                 daily = f"{bull / DAYS:>8.2f}{bear / DAYS:>8.2f}{(bull + bear) / DAYS:>8.2f}"
                 print(f"{label}{daily}{stats}")
+            if args.profile_table:
+                render_coverage(symbol, f"{context_tf.value} n={n_ctx}", coverage)
     print("\nCounting unit: swept swings (one WICK_BREAK max per armed swing);")
     print("distances measured at the recovery close, warm-up excluded from counting.")
+    if args.profile_table:
+        print(
+            "buckets (priorite): no_profile (absent/perime), hors_plage (hors "
+            "[low, high] de J-1), poc_zone, sous_val (<= VAL), sur_vah (>= VAH), "
+            "dans_valeur; cellule = part% de la direction + sweeps/j resultants."
+        )
     if args.stop_table:
         print(
             f"cout_R = {COST_FLOOR_PCT}% / distance ; quantiles du cout par transformee inverse "
