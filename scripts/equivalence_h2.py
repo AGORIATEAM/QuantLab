@@ -1,0 +1,177 @@
+"""H2 equivalence harness (ADR-0003): 90-day trade-by-trade Decimal
+reference vs fast mirror on all 288 frozen configurations, plus hash
+determinism of the fast path. The synthetic mini-equivalence lives in CI
+(tests/unit/test_h2fast.py). Exit 0 only when green.
+
+Usage: python scripts/equivalence_h2.py
+"""
+
+from __future__ import annotations
+
+import hashlib
+import os
+import sys
+import time
+from datetime import UTC, datetime, timedelta
+from decimal import Decimal
+
+from quantlab.core.clock import SimulatedClock
+from quantlab.core.config import AppConfig
+from quantlab.core.logging import configure_logging
+from quantlab.data.datasets import SeriesResolver
+from quantlab.data.replay import replay_candles
+from quantlab.domain.models import Timeframe
+from quantlab.research.baseline import FillModel
+from quantlab.research.fast.equivalence import compare_trade_logs
+from quantlab.research.fast.extract import extract_rows_multi
+from quantlab.research.fast.h2fast import TF_1H, run_shard_h2
+from quantlab.research.h1 import H1Config
+from quantlab.research.h2 import H2LoggingSimulator
+from quantlab.storage.postgres.adapter import (
+    PostgresAuditEventWriter,
+    PostgresCandleSnapshotFactory,
+    PostgresDataQualityEventRepository,
+    PostgresDatasetRepository,
+    PostgresInstrumentRepository,
+    PostgresVenueRepository,
+)
+from quantlab.structure.breaks import ValidationMethod
+from quantlab.structure.engine import DetectorKind, MarketStructureEngine, StructureConfig
+from run_h2_fast import DATASET, TIMEFRAMES, configs_list
+
+WINDOW_90D = (datetime(2021, 1, 1, tzinfo=UTC), datetime(2021, 4, 1, tzinfo=UTC))
+
+
+def engine_for(det_is_atr: int, n: int, mult: float, buf: float) -> MarketStructureEngine:
+    return MarketStructureEngine(
+        StructureConfig(
+            detector=DetectorKind.ATR if det_is_atr else DetectorKind.FRACTAL,
+            n=n,
+            atr_multiplier=Decimal(str(mult)),
+            validation=ValidationMethod.ATR_BUFFER if buf > 0 else ValidationMethod.CLOSE,
+            breakout_buffer=Decimal(str(buf)),
+        )
+    )
+
+
+def slow_trade_logs(url: str) -> dict[int, list]:
+    start, end = WINDOW_90D
+    datasets = PostgresDatasetRepository(url)
+    resolve = SeriesResolver(PostgresVenueRepository(url), PostgresInstrumentRepository(url))
+    configs = configs_list()
+    engines_5m: dict[tuple, MarketStructureEngine] = {}
+    engines_ctx: dict[tuple, MarketStructureEngine] = {}
+    for _i, ctx, n5, det, mult, buf, _r, _ms in configs:
+        k5 = (n5, det, mult, buf)
+        kc = (ctx, det, mult, buf)
+        if k5 not in engines_5m:
+            engines_5m[k5] = engine_for(det, n5, mult, buf)
+        if kc not in engines_ctx:
+            n_ctx = 8 if ctx == TF_1H else 5
+            engines_ctx[kc] = engine_for(det, n_ctx, mult, buf)
+    sims: dict[int, tuple[H2LoggingSimulator, tuple]] = {}
+    keys: dict[Timeframe, object] = {}
+    fill = FillModel()
+
+    for event in replay_candles(
+        PostgresCandleSnapshotFactory(url),
+        datasets,
+        resolve,
+        PostgresDataQualityEventRepository(url),
+        PostgresAuditEventWriter(url),
+        *DATASET,
+        SimulatedClock(start),
+        symbols=["BTCUSDT"],
+        timeframes=TIMEFRAMES,
+        start=start,
+        end=end,
+        lookback=timedelta(days=30),
+    ):
+        tf = event.series.timeframe
+        keys[tf] = event.series
+        if tf is not Timeframe.M5:
+            ctx_idx = 1 if tf is Timeframe.H1 else 2
+            for kc, engine in engines_ctx.items():
+                if kc[0] == ctx_idx:
+                    engine.on_event(event)
+            continue
+        if not sims:
+            for i, ctx, n5, det, mult, buf, r, ms in configs:
+                key_ctx = keys.get(Timeframe.H1 if ctx == TF_1H else Timeframe.H4)
+                if key_ctx is None:  # context key deterministic from the 5m key
+                    key_ctx = type(event.series)(
+                        venue=event.series.venue,
+                        venue_symbol=event.series.venue_symbol,
+                        timeframe=Timeframe.H1 if ctx == TF_1H else Timeframe.H4,
+                        source=event.series.source,
+                    )
+                sims[i] = (
+                    H2LoggingSimulator(
+                        H1Config(
+                            n5,
+                            0,
+                            Decimal(str(mult)),
+                            Decimal(str(buf)),
+                            Decimal(str(r)),
+                            Decimal(str(ms)),
+                        ),
+                        engines_5m[(n5, det, mult, buf)],
+                        engines_ctx[(ctx, det, mult, buf)],
+                        event.series,
+                        key_ctx,
+                        fill,
+                    ),
+                    (n5, det, mult, buf),
+                )
+        outs = {k5: engine.on_event(event) for k5, engine in engines_5m.items()}
+        for sim, k5 in sims.values():
+            sim.on_5m(event, outs[k5])
+    for sim, _k5 in sims.values():
+        sim.finalize()
+    return {i: sim.trade_log for i, (sim, _k5) in sims.items()}
+
+
+def main() -> int:
+    url = os.environ.get("QUANTLAB_DATABASE_URL")
+    if not url:
+        print("QUANTLAB_DATABASE_URL is not set", file=sys.stderr)
+        return 2
+    configure_logging(AppConfig.load().log_level)
+    start, end = WINDOW_90D
+
+    print(f"H2 equivalence: window [{start.date()} → {end.date()}), Decimal reference…")
+    t0 = time.monotonic()
+    slow_logs = slow_trade_logs(url)
+    print(f"  slow pass done in {(time.monotonic() - t0) / 60:.1f} min")
+
+    print("H2 equivalence: fast path, twice (determinism)…")
+    rows = extract_rows_multi(url, *DATASET, "BTCUSDT", start, end, TIMEFRAMES)
+    fast_a = run_shard_h2(rows, configs_list(), log_trades=True)
+    fast_b = run_shard_h2(rows, configs_list(), log_trades=True)
+    digest_a = hashlib.sha256(repr([(i, m, t) for i, m, _c, t in fast_a]).encode()).hexdigest()
+    digest_b = hashlib.sha256(repr([(i, m, t) for i, m, _c, t in fast_b]).encode()).hexdigest()
+    if digest_a != digest_b:
+        print(f"DETERMINISM FAILED: {digest_a} != {digest_b}", file=sys.stderr)
+        return 1
+    print(f"  determinism OK: {digest_a[:16]}…")
+
+    total = 0
+    diffs: list[str] = []
+    for index, _metrics, _context, log in fast_a:
+        slow_log = slow_logs[index]
+        total += len(slow_log)
+        diffs.extend(compare_trade_logs(slow_log, log or [], f"cfg{index}"))
+    if diffs:
+        print(f"H2 EQUIVALENCE FAILED: {len(diffs)} difference(s); first 10:", file=sys.stderr)
+        for d in diffs[:10]:
+            print(f"  {d}", file=sys.stderr)
+        return 1
+    print(
+        f"  H2 equivalence OK: {total} trades across 288 configurations, "
+        "timings/side exact, prices and R within rel 1e-9"
+    )
+    return 0
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

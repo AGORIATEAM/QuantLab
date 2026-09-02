@@ -67,3 +67,52 @@ def extract_rows(
             )
         )
     return rows
+
+
+MultiRow = tuple[int, bool, int, float, float, float, float]
+
+
+def extract_rows_multi(
+    url: str,
+    dataset_name: str,
+    version: str,
+    symbol: str,
+    start: datetime,
+    end: datetime,
+    timeframes: list[Timeframe],
+    lookback_days: int = 30,
+) -> list[MultiRow]:
+    """Like extract_rows for an arbitrary timeframe list: the first tuple
+    element is the INDEX of the event's timeframe in `timeframes`."""
+    datasets = PostgresDatasetRepository(url)
+    resolve = SeriesResolver(PostgresVenueRepository(url), PostgresInstrumentRepository(url))
+    index = {tf: i for i, tf in enumerate(timeframes)}
+    rows: list[MultiRow] = []
+    for event in replay_candles(
+        PostgresCandleSnapshotFactory(url),
+        datasets,
+        resolve,
+        PostgresDataQualityEventRepository(url),
+        PostgresAuditEventWriter(url),
+        dataset_name,
+        version,
+        SimulatedClock(start),
+        symbols=[symbol],
+        timeframes=timeframes,
+        start=start,
+        end=end,
+        lookback=timedelta(days=lookback_days),
+    ):
+        c = event.candle
+        rows.append(
+            (
+                index[event.series.timeframe],
+                event.is_warmup,
+                int(c.open_time.timestamp()),
+                float(c.open),
+                float(c.high),
+                float(c.low),
+                float(c.close),
+            )
+        )
+    return rows

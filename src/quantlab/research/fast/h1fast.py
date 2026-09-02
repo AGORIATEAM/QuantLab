@@ -7,8 +7,9 @@ equivalence levels are the proof. Any rule change lands in the Decimal
 reference FIRST, then here.
 
 Deliberate deviations with zero behavioral impact on H1:
-- WICK_BREAK bookkeeping is skipped entirely (it never consumes a level
-  and the simulator ignores wick events);
+- WICK_BREAK events ARE mirrored (H2 consumes them; once per armed swing,
+  never consuming the level — H1 ignores them, proven by the unchanged
+  golden SHA after their introduction);
 - the swing sequence keeps only its last 4 entries (alternation
   guarantees they are 2 highs + 2 lows, all the state machine reads);
 - structure events are returned as plain (kind, direction) pairs.
@@ -23,7 +24,7 @@ from dataclasses import dataclass, field
 UNKNOWN, BULLISH, BEARISH, NEUTRAL = 0, 1, 2, 3
 # swing kinds / break kinds / directions
 HIGH, LOW = 0, 1
-BOS, CHOCH = 0, 1  # unclassified breaks consume the level but emit nothing
+BOS, CHOCH, WICK = 0, 1, 2  # unclassified breaks consume the level but emit nothing
 
 
 class FastAtr:
@@ -55,16 +56,19 @@ class FastStructure:
     sequence with the min-leg filter, state machine, BOS/CHoCH with level
     consumption, readiness gate with the announce-candle swallowing."""
 
-    def __init__(self, n: int, atr_multiplier: float, breakout_buffer: float) -> None:
+    def __init__(
+        self, n: int, atr_multiplier: float, breakout_buffer: float, filter_legs: bool = True
+    ) -> None:
         self.n = n
         self.mult = atr_multiplier
         self.buffer = breakout_buffer  # 0 -> close validation (method A)
+        self.filter_legs = filter_legs  # False -> fractal detector (no ATR min-leg)
         self.atr = FastAtr(14)
         self._window: deque[tuple[float, float]] = deque(maxlen=2 * n + 1)  # (high, low)
         self._swings: list[tuple[int, float]] = []  # (kind, price), alternating, capped at 4
         self.state = UNKNOWN
         self._announced = False
-        self._armed: list[tuple[float, bool] | None] = [None, None]  # per kind: (level, _)
+        self._armed: list[list[float | bool] | None] = [None, None]  # [level, wick_flagged]
         self.last_high: float | None = None
         self.last_low: float | None = None
 
@@ -79,7 +83,7 @@ class FastStructure:
                 return False
             self._swings[-1] = (kind, price)
         else:
-            if last is not None:  # min-leg filter, measured from the opposite swing
+            if self.filter_legs and last is not None:  # ATR min-leg from the opposite swing
                 min_leg = None if self.atr.value is None else self.atr.value * self.mult
                 if min_leg is not None and abs(price - last[1]) < min_leg:
                     return False
@@ -90,7 +94,7 @@ class FastStructure:
             self.last_high = price
         else:
             self.last_low = price
-        self._armed[kind] = (price, True)  # arm/re-arm the level (règle 4)
+        self._armed[kind] = [price, False]  # arm/re-arm the level (règle 4)
         return True
 
     def _derive_state(self) -> int:
@@ -120,8 +124,10 @@ class FastStructure:
 
     # -- per candle ---------------------------------------------------------
 
-    def update(self, o: float, h: float, lo: float, c: float) -> list[tuple[int, int]]:
-        """Returns [(BOS|CHOCH, BULLISH|BEARISH), ...] for this close."""
+    def update(self, o: float, h: float, lo: float, c: float) -> list[tuple[int, int, float]]:
+        """Returns [(BOS|CHOCH|WICK, direction, break_price), ...] for this
+        close — break_price mirrors the slow BreakEvent (the close for a
+        validated break, the wick extreme for a WICK_BREAK)."""
         self.atr.update(h, lo, c)
         self._window.append((h, lo))
         if len(self._window) == self._window.maxlen:
@@ -141,24 +147,31 @@ class FastStructure:
         if not self._announced:
             self._announced = True
             return []  # the announce candle emits only the state snapshot
-        events: list[tuple[int, int]] = []
+        events: list[tuple[int, int, float]] = []
         atr = self.atr.value
         for kind, direction in ((HIGH, BULLISH), (LOW, BEARISH)):
             armed = self._armed[kind]
             if armed is None:
                 continue
-            level = armed[0]
+            level = float(armed[0])
             threshold = level + (atr or 0.0) * self.buffer * (1 if kind == HIGH else -1)
             validated = c > threshold if kind == HIGH else c < threshold
-            if not validated:
-                continue
-            self._armed[kind] = None  # consumed, even when unclassified
-            if kind == HIGH:
-                out = BOS if self.state == BULLISH else (CHOCH if self.state == BEARISH else None)
-            else:
-                out = BOS if self.state == BEARISH else (CHOCH if self.state == BULLISH else None)
-            if out is not None:
-                events.append((out, direction))
+            wicked = (h > level) if kind == HIGH else (lo < level)
+            if validated:
+                self._armed[kind] = None  # consumed, even when unclassified
+                if kind == HIGH:
+                    out = (
+                        BOS if self.state == BULLISH else (CHOCH if self.state == BEARISH else None)
+                    )
+                else:
+                    out = (
+                        BOS if self.state == BEARISH else (CHOCH if self.state == BULLISH else None)
+                    )
+                if out is not None:
+                    events.append((out, direction, c))
+            elif wicked and not armed[1]:
+                armed[1] = True  # once per armed swing; the level stays armed
+                events.append((WICK, direction, h if kind == HIGH else lo))
         return events
 
 
@@ -289,7 +302,7 @@ class FastSimulator:
         h: float,
         lo: float,
         c: float,
-        events: list[tuple[int, int]],
+        events: list[tuple[int, int, float]],
     ) -> None:
         if warmup:
             return
@@ -320,9 +333,9 @@ class FastSimulator:
         self._signals(events, c)
         self._mark(ots, c)
 
-    def _signals(self, events: list[tuple[int, int]], close: float) -> None:
+    def _signals(self, events: list[tuple[int, int, float]], close: float) -> None:
         h1_state = self.s1.state_of()
-        for kind, direction in events:
+        for kind, direction, _price in events:
             if kind == CHOCH and self._position is not None:
                 against = direction == BEARISH if self._position.side > 0 else direction == BULLISH
                 if against:
