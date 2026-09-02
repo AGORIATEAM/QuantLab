@@ -1,13 +1,13 @@
 {
   "experiment_id": "EXP-20260902-002",
   "title": "H3: failed 15m sweep, risk sized to noise",
-  "status": "PLANNED",
+  "status": "COMPLETED",
   "owner": "quantlab",
   "created_at": "2026-09-02T06:15:00+00:00",
   "hypothesis": "Un balayage raté d'un swing 15m contre le sens du contexte lent, suivi d'une clôture de reprise, a une espérance nette positive après coûts lorsque le risque est dimensionné au bruit (stop k×ATR ancré sous la mèche).",
   "experiment_type": "strategy-hypothesis",
   "strategy_version": null,
-  "code_commit": null,
+  "code_commit": "d0cb250",
   "dataset_version": "btc-eth-spot-binance@v1",
   "dataset_content_hash": "178e7403a3d60e4a3888c6e56833e9bfcba3b41d20084b87d1b10ed1cfbb9b46",
   "config_version": null,
@@ -104,8 +104,72 @@
   ],
   "note_metrics": "share_stop_dominated_by_atr (part des trades où k×ATR > mèche) ajoute la lecture directe du trade-off conceptuel assumé.",
   "acceptance_criteria": "GELÉ À LA RÉDACTION (mêmes seuils qu'Hyp-1/2) : H3 est REJETÉE si, en out-of-sample, l'espérance nette par trade est <= 0 OU le profit factor < 1.15 sur l'UN des deux instruments, OU si les résultats s'inversent dans un voisinage intra-famille de détecteur (fractal entre eux ; ATR entre points voisins). Par la règle de l'addendum B (ADR-0002), un IS uniformément non viable clôt l'hypothèse REJECTED sur l'IS seul, sans consommer l'OOS.",
-  "results": null,
-  "decision": null,
-  "artifacts": [],
-  "notes": "Gelé PLANNED le 2026-09-02 (trois arbitrages confirmés : grille 96 avec buffers hérités — ils définissent l'événement, pas la gestion ; min_stop supprimé avec justification ; métrique share_stop_dominated_by_atr). séquence habituelle — (1) runner H3 Decimal de référence + miroir fast, équivalence complète (90 j trade par trade, déterminisme au hash, mini-équivalence synthétique en CI) ; (2) IS 2 instruments + rapport diagnostique (métriques amendées + fréquence effective vs les tables descriptives du 2026-09-02) ; (3) ARRÊT — OOS uniquement sur ordre utilisateur explicite si l'IS le mérite (addendum B). Sources de calibrage : tables commitées 31c0f39 (fréquences/distances mèche) et 4ebe802 (définitions de stop)."
+  "results": {
+    "in_sample": {
+      "window": "[2017-08-17, 2023-01-01)",
+      "BTCUSDT": {
+        "configs": 96,
+        "positive_expectancy": 0,
+        "expectancy_r": {
+          "median": -0.1423,
+          "min": -0.2178,
+          "max": -0.0698
+        },
+        "gross_expectancy_r": {
+          "median": 0.0139,
+          "min": -0.042,
+          "max": 0.0673,
+          "positive": 66
+        },
+        "avg_cost_r_median": 0.1522,
+        "avg_stop_pct_median": 2.033,
+        "share_stop_dominated_pct_median": 99.3,
+        "profit_factor": {
+          "median": 0.7506,
+          "max": 0.849
+        },
+        "win_rate_pct_median": 33.0,
+        "trades_median": 1578,
+        "trades_per_day_median": 0.804,
+        "pct_time_neutral_context_median": 35.5,
+        "csv_sha256": "b8edae218ed223e867ad720c22c616bad2cbee1bd1e9d11251ebc35661298dab"
+      },
+      "ETHUSDT": {
+        "configs": 96,
+        "positive_expectancy": 0,
+        "expectancy_r": {
+          "median": -0.1064,
+          "min": -0.1647,
+          "max": -0.0375
+        },
+        "gross_expectancy_r": {
+          "median": 0.0128,
+          "min": -0.0307,
+          "max": 0.0613,
+          "positive": 68
+        },
+        "avg_cost_r_median": 0.1176,
+        "avg_stop_pct_median": 2.508,
+        "share_stop_dominated_pct_median": 99.5,
+        "profit_factor": {
+          "median": 0.7999,
+          "max": 0.913
+        },
+        "win_rate_pct_median": 33.9,
+        "trades_median": 1544,
+        "trades_per_day_median": 0.786,
+        "pct_time_neutral_context_median": 37.7,
+        "csv_sha256": "e63f07ceecac2cbb974880c815f7f9ba126a7993ce2d07eb8115c48050c9cb1f"
+      },
+      "diagnostic": "(1) La promesse du calibrage est TENUE : cout moyen 0,12-0,15 R median (vs 1,3-1,6 R en H2) — le stop dimensionne au bruit fonctionne comme prevu ; part des stops domines par k x ATR 99,3-99,5 % (le stop est de facto un stop de volatilite, trade-off assume au gel). (2) Fait nouveau vs H1/H2 : l'esperance BRUTE mediane est POSITIVE sur les deux instruments (+0,014 R BTC, +0,013 R ETH ; 66-68/96 configs brutes > 0) — le timing du sweep contient un signal reel mais minuscule (0,01-0,07 R), ~10x plus petit que le cout. (3) Aucune inversion intra-famille : tout le voisinage est negatif net, gradients coherents (k=4 meilleur que k=3, 1d legerement meilleur que 4h sur BTC). (4) avg_stop_pct 2,0-2,5 % vs ~0,8-1,0 % attendu de la table 2024 : l'IS inclut 2017-2021 ou l'ATR 15m etait bien plus grand ; le cout en R reste dans la cible car il varie en 1/stop. (5) Frequence effective 0,80 trade/j vs 0,95-1,8 sweeps/j des tables descriptives : ~la moitie des signaux avales en position (pas de pyramidage)."
+    },
+    "out_of_sample": "NON EXECUTE — deliberement preserve (ADR-0002 addendum B) : l'IS ne franchit les criteres necessaires sur aucune des 192 lignes (0/96 BTC, 0/96 ETH).",
+    "equivalence": "90 j [2021-01-01, 2021-04-01) BTCUSDT : 6905 trades sur 96 configs, parite trade par trade Decimal<->fast (timings/side exacts, prix et R rel 1e-9), compteur stop_atr_dominated exact par config (6889/6905 domines), determinisme au hash f05dbfe850d951fa. Mini-equivalence synthetique en CI (test_h3fast.py) incluant la degenerescence k=0 == H2 min_stop=0."
+  },
+  "decision": "REJECTED sur l'IS seul (2026-09-02), OOS non consomme — application du critere gele : esperance nette <= 0 sur 96/96 configurations pour CHAQUE instrument (aucune ligne ne franchit les criteres necessaires), donc IS uniformement non viable au sens de l'addendum B (ADR-0002). L'hypothese H3 est refutee dans sa forme testee : meme dimensionne au bruit (cout ramene a ~0,13 R/trade), le timing du balayage rate n'apporte que +0,01 a +0,07 R brut — un ordre de grandeur sous le plancher de cout taker 0,22 %/aller-retour. Le signal existe mais n'est pas monetisable en execution taker au comptant.",
+  "artifacts": [
+    "insample_BTCUSDT_metrics.csv",
+    "insample_ETHUSDT_metrics.csv"
+  ],
+  "notes": "Gelé PLANNED le 2026-09-02 (trois arbitrages confirmés : grille 96 avec buffers hérités — ils définissent l'événement, pas la gestion ; min_stop supprimé avec justification ; métrique share_stop_dominated_by_atr). séquence habituelle — (1) runner H3 Decimal de référence + miroir fast, équivalence complète (90 j trade par trade, déterminisme au hash, mini-équivalence synthétique en CI) ; (2) IS 2 instruments + rapport diagnostique (métriques amendées + fréquence effective vs les tables descriptives du 2026-09-02) ; (3) ARRÊT — OOS uniquement sur ordre utilisateur explicite si l'IS le mérite (addendum B). Sources de calibrage : tables commitées 31c0f39 (fréquences/distances mèche) et 4ebe802 (définitions de stop). | CLOTURE 2026-09-02 : sequence executee integralement (equivalence verte -> IS 2 instruments -> rapport diagnostique -> ARRET avant OOS). Compute IS : 1,1 min les deux instruments (ADR-0003)."
 }
