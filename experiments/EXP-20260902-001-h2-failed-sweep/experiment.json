@@ -1,13 +1,13 @@
 {
   "experiment_id": "EXP-20260902-001",
   "title": "H2: failed sweep against the slow context, recovery close",
-  "status": "PLANNED",
+  "status": "COMPLETED",
   "owner": "quantlab",
   "created_at": "2026-09-02T05:10:00+00:00",
   "hypothesis": "Un balayage raté d'un swing 5m contre le sens du contexte lent, suivi d'une clôture de reprise, a une espérance nette positive après coûts — les cassures étant plus souvent des prises de liquidité que des départs.",
   "experiment_type": "strategy-hypothesis",
   "strategy_version": null,
-  "code_commit": null,
+  "code_commit": "4d99009d0c55362af8688945ac2a056365577fc7",
   "dataset_version": "btc-eth-spot-binance@v1",
   "dataset_content_hash": "178e7403a3d60e4a3888c6e56833e9bfcba3b41d20084b87d1b10ed1cfbb9b46",
   "config_version": null,
@@ -105,8 +105,47 @@
     "comparison_vs_EXP-20260901-001_002_and_003"
   ],
   "acceptance_criteria": "GELÉ (2026-09-02) : H2 est REJETÉE si, en out-of-sample, l'espérance nette par trade est <= 0 OU le profit factor < 1.15 sur l'UN des deux instruments, OU si les résultats s'inversent dans un voisinage de paramètres — l'inversion s'évaluant AU SEIN de chaque famille de détecteur (fractal entre eux ; ATR entre multiplicateurs voisins), jamais entre familles.",
-  "results": null,
-  "decision": null,
-  "artifacts": [],
-  "notes": "Gelé le 2026-09-02 : grille détecteur complète (288 configs), les deux contextes au voisinage, critères de réfutation identiques à H1 avec inversion intra-famille, règles de fill/ambiguïtés/taille/cap/fenêtres/métriques héritées de EXP-20260901-003 amendé telles quelles. ORDRE D'EXÉCUTION STRICT : (1) runner Decimal de référence + miroir fast + équivalence complète (90 j trade par trade, déterminisme au hash, mini-équivalence synthétique en CI) ; (2) IS 2 instruments + rapport diagnostique (métriques amendées + fréquence effective des entrées vs la table descriptive) ; (3) OOS UNIQUEMENT sur feu vert utilisateur après lecture du rapport IS."
+  "results": {
+    "executed": "2026-09-02, in-sample only, on the ADR-0003 fast path",
+    "equivalence_proofs": "H1 golden-SHA regression intact after the WICK/fractal engine extension; 90-day window: 79,146 trades across the 288 frozen configurations identical trade-by-trade between the Decimal reference and the fast mirror (timings/side exact, prices/R at rel 1e-9); hash-level determinism; synthetic mini-equivalence in CI",
+    "runtime": "in-sample 2 instruments 7.7 min",
+    "summary": {
+      "insample_BTCUSDT": {
+        "configs": 288,
+        "configs_expectancy_positive": 0,
+        "expectancy_r_median": -1.5999,
+        "expectancy_r_range": [
+          -2.9795,
+          -1.1382
+        ],
+        "profit_factor_median": 0.3617,
+        "avg_cost_r_median": 1.5911,
+        "avg_stop_pct_median": 0.2701,
+        "capped_share_pct_median": 88.01,
+        "trades_per_day_median": 2.87
+      },
+      "insample_ETHUSDT": {
+        "configs": 288,
+        "configs_expectancy_positive": 0,
+        "expectancy_r_median": -1.2817,
+        "expectancy_r_range": [
+          -2.6023,
+          -0.9133
+        ],
+        "profit_factor_median": 0.309,
+        "avg_cost_r_median": 1.2648,
+        "avg_stop_pct_median": 0.334,
+        "capped_share_pct_median": 82.7,
+        "trades_per_day_median": 2.72
+      }
+    },
+    "mechanism": "Gross of costs the sweep signal is ~neutral (median expectancy + median cost ~ 0.00 R on both instruments); the wick-extreme stop (median 0.27-0.33%) sits at the same scale as the 0.22% round-trip cost floor, so costs consume 1.27-1.59 R per trade. min_stop_atr finally bites (median 2,917 skips at 0.5) and improves expectancy monotonically (-2.42 -> -1.27 R) without rescuing it; ~85% of trades hit the 1x equity cap. Neighborhood stable, no inversion.",
+    "oos": "NOT RUN — deliberately preserved (see decision)"
+  },
+  "decision": "REJECTED — Rejet sur l'in-sample seul : espérance <= 0 sur l'intégralité du voisinage (0/288), les deux instruments, sans inversion ; l'OOS est délibérément préservé (ressource épuisable, réservée aux hypothèses dont l'IS est viable).",
+  "artifacts": [
+    "insample_BTCUSDT_metrics.csv",
+    "insample_ETHUSDT_metrics.csv"
+  ],
+  "notes": "Clos le 2026-09-02 sur décision utilisateur, sans consommer la fenêtre out-of-sample. PRINCIPE CONSIGNÉ (règle du protocole à compter de cette expérience) : l'OOS est une ressource épuisable — il n'est exécuté QUE si l'in-sample franchit les critères nécessaires ; un IS uniformément non viable clôt l'hypothèse en REJECTED sur l'IS seul."
 }
