@@ -75,6 +75,29 @@ class VolumeProfile:
     config_version: str
 
 
+BUCKETS = ["no_profile", "hors_plage", "poc_zone", "sous_val", "sur_vah", "dans_valeur"]
+POC_ZONE_ATR = Decimal("0.25")
+
+
+def classify_level(
+    level: Decimal, atr: Decimal, profile: VolumeProfile | None, signal_day: date
+) -> str:
+    """Swept-level localization vs the J-1 profile — user-validated
+    partition, priority order (frozen 2026-09-02; single source of truth
+    for the descriptive table AND EXP-20260902-003)."""
+    if profile is None or profile.day != signal_day - timedelta(days=1):
+        return "no_profile"
+    if level > profile.day_high or level < profile.day_low:
+        return "hors_plage"
+    if abs(level - profile.poc) <= POC_ZONE_ATR * atr:
+        return "poc_zone"
+    if level <= profile.val:
+        return "sous_val"
+    if level >= profile.vah:
+        return "sur_vah"
+    return "dans_valeur"
+
+
 @dataclass
 class _DayAccumulator:
     day: date

@@ -32,9 +32,9 @@ H2Config = tuple[int, int, int, int, float, float, float, float]
 
 
 class FastH2Simulator(FastSimulator):
-    def _signals(self, events: list[tuple[int, int, float]], close: float) -> None:
+    def _signals(self, events: list[tuple[int, int, float, float]], close: float) -> None:
         context_state = self.s1.state_of()
-        for kind, direction, price in events:
+        for kind, direction, price, _level in events:
             if kind == CHOCH and self._position is not None:
                 against = direction == BEARISH if self._position.side > 0 else direction == BULLISH
                 if against:

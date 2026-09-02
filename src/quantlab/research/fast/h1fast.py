@@ -124,10 +124,13 @@ class FastStructure:
 
     # -- per candle ---------------------------------------------------------
 
-    def update(self, o: float, h: float, lo: float, c: float) -> list[tuple[int, int, float]]:
-        """Returns [(BOS|CHOCH|WICK, direction, break_price), ...] for this
-        close — break_price mirrors the slow BreakEvent (the close for a
-        validated break, the wick extreme for a WICK_BREAK)."""
+    def update(
+        self, o: float, h: float, lo: float, c: float
+    ) -> list[tuple[int, int, float, float]]:
+        """Returns [(BOS|CHOCH|WICK, direction, break_price, level), ...]
+        for this close — break_price mirrors the slow BreakEvent (the close
+        for a validated break, the wick extreme for a WICK_BREAK); level is
+        the armed swing (BreakEvent.level), needed by H4's localization."""
         self.atr.update(h, lo, c)
         self._window.append((h, lo))
         if len(self._window) == self._window.maxlen:
@@ -147,7 +150,7 @@ class FastStructure:
         if not self._announced:
             self._announced = True
             return []  # the announce candle emits only the state snapshot
-        events: list[tuple[int, int, float]] = []
+        events: list[tuple[int, int, float, float]] = []
         atr = self.atr.value
         for kind, direction in ((HIGH, BULLISH), (LOW, BEARISH)):
             armed = self._armed[kind]
@@ -168,10 +171,10 @@ class FastStructure:
                         BOS if self.state == BEARISH else (CHOCH if self.state == BULLISH else None)
                     )
                 if out is not None:
-                    events.append((out, direction, c))
+                    events.append((out, direction, c, level))
             elif wicked and not armed[1]:
                 armed[1] = True  # once per armed swing; the level stays armed
-                events.append((WICK, direction, h if kind == HIGH else lo))
+                events.append((WICK, direction, h if kind == HIGH else lo, level))
         return events
 
 
@@ -304,7 +307,7 @@ class FastSimulator:
         h: float,
         lo: float,
         c: float,
-        events: list[tuple[int, int, float]],
+        events: list[tuple[int, int, float, float]],
     ) -> None:
         if warmup:
             return
@@ -335,9 +338,9 @@ class FastSimulator:
         self._signals(events, c)
         self._mark(ots, c)
 
-    def _signals(self, events: list[tuple[int, int, float]], close: float) -> None:
+    def _signals(self, events: list[tuple[int, int, float, float]], close: float) -> None:
         h1_state = self.s1.state_of()
-        for kind, direction, _price in events:
+        for kind, direction, _price, _level in events:
             if kind == CHOCH and self._position is not None:
                 against = direction == BEARISH if self._position.side > 0 else direction == BULLISH
                 if against:

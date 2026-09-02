@@ -54,8 +54,8 @@ from quantlab.core.logging import configure_logging
 from quantlab.data.datasets import SeriesResolver
 from quantlab.data.replay import replay_candles
 from quantlab.domain.models import Timeframe
+from quantlab.profile import BUCKETS, ProfileConfig, VolumeProfileEngine, classify_level
 from quantlab.profile import ENGINE_VERSION as PROFILE_ENGINE_VERSION
-from quantlab.profile import ProfileConfig, VolumeProfile, VolumeProfileEngine
 from quantlab.storage.postgres.adapter import (
     PostgresAuditEventWriter,
     PostgresCandleSnapshotFactory,
@@ -89,27 +89,6 @@ def engine(detector: DetectorKind, n: int, mult: Decimal | None) -> MarketStruct
             validation=ValidationMethod.CLOSE,
         )
     )
-
-
-BUCKETS = ["no_profile", "hors_plage", "poc_zone", "sous_val", "sur_vah", "dans_valeur"]
-POC_ZONE_ATR = Decimal("0.25")
-
-
-def classify_level(
-    level: Decimal, atr: Decimal, profile: VolumeProfile | None, signal_day: date
-) -> str:
-    """User-validated partition, priority order (frozen 2026-09-02)."""
-    if profile is None or profile.day != signal_day - timedelta(days=1):
-        return "no_profile"
-    if level > profile.day_high or level < profile.day_low:
-        return "hors_plage"
-    if abs(level - profile.poc) <= POC_ZONE_ATR * atr:
-        return "poc_zone"
-    if level <= profile.val:
-        return "sous_val"
-    if level >= profile.vah:
-        return "sur_vah"
-    return "dans_valeur"
 
 
 def measure(
